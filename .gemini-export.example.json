@@ -1,0 +1,56 @@
+{
+  "sourceDir": "playwright",
+  "outDir": ".ai-context/playwright-gemini",
+
+  "includeExtensions": [
+    ".ts",
+    ".js",
+    ".json",
+    ".md",
+    ".yml",
+    ".yaml",
+    ".txt",
+    ".html",
+    ".css"
+  ],
+
+  "includeFiles": [
+    "package.json",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "tsconfig.json"
+  ],
+
+  "excludeDirs": [
+    ".git",
+    "node_modules",
+    "playwright-report",
+    "test-results",
+    "coverage",
+    "dist",
+    "build"
+  ],
+
+  "excludeFilePatterns": [
+    "^\\.env($|\\.)",
+    "\\.pem$",
+    "\\.key$",
+    "\\.p12$",
+    "\\.crt$",
+    "\\.sqlite$",
+    "\\.db$",
+    "\\.mp4$",
+    "\\.webm$",
+    "\\.zip$",
+    "\\.gz$",
+    "\\.png$",
+    "\\.jpg$",
+    "\\.jpeg$",
+    "\\.gif$",
+    "\\.svg$",
+    "\\.pdf$",
+    "\\.trace$"
+  ],
+
+  "maxFileSizeBytes": 524288
+}

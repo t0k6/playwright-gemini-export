@@ -1,0 +1,9 @@
+{
+  "name": "playwright-gemini-export",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "export:gemini:pw": "node ./tools/export-gemini-playwright-context.mjs"
+  }
+}
