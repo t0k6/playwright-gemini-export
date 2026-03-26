@@ -49,6 +49,7 @@ npm run export:gemini:pw
 
 - secrets は「完全には」検出できない
 - 必ず manifest を人間が確認すること
+- 実行時にセキュリティNOTICEが標準出力されるので、内容を確認すること
 - fixture に実データを入れないこと
 
 ## 推奨運用

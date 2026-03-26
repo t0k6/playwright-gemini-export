@@ -69,29 +69,76 @@ const defaultConfig = {
   ],
   redactTextPatterns: [
     {
-      name: "generic-api-key-assignment",
-      regex: "(?i)\\b(api[_-]?key|token|secret|password|passwd|client[_-]?secret)\\b\\s*[:=]\\s*[\"'`][^\"'`\\n]{6,}[\"'`]",
-      replacement: "$1 = \"***REDACTED***\""
+      name: "generic-secret-assignment-quoted",
+      // 例: `API_KEY = "abcdef"` / `token: 'abcdef'`
+      regex: "\\b(api[_-]?key|token|secret|password|passwd|client[_-]?secret)\\b\\s*([:=])\\s*[\"'`]([^\"'`\\n]{6,})[\"'`]",
+      replacement: "$1$2\"***REDACTED***\""
+    },
+    {
+      name: "generic-secret-assignment-unquoted",
+      // 例: `API_KEY=abcdef`
+      regex: "\\b(api[_-]?key|token|secret|password|passwd|client[_-]?secret)\\b\\s*([:=])\\s*[^\\s\"'`\\n]{6,}",
+      replacement: "$1$2\"***REDACTED***\""
+    },
+    {
+      name: "generic-secret-assignment-backtick-multiline",
+      // 例: `const key = `abc\\ndef``（改行を含むテンプレートリテラル）
+      regex: "\\b(api[_-]?key|token|secret|password|passwd|client[_-]?secret)\\b\\s*([:=])\\s*`[\\s\\S]{6,}?`",
+      replacement: "$1$2\"***REDACTED***\""
     },
     {
       name: "bearer-token",
-      regex: "(?i)bearer\\s+[a-z0-9\\-._~+/]+=*",
+      regex: "bearer\\s+[a-z0-9\\-._~+/]+=*",
       replacement: "Bearer ***REDACTED***"
     },
     {
-      name: "authorization-header",
-      regex: "(?i)(authorization\\s*[:=]\\s*[\"'`]?)([^\"'`\\n]+)",
+      name: "authorization-header-quoted",
+      // 構文破壊（閉じクォート残り）を防ぐため、開始/終了クォートを両方保持して置換する
+      regex: "(authorization\\s*[:=]\\s*[\"'`])([^\"'`\\n]+)([\"'`])",
+      replacement: "$1***REDACTED***$3"
+    },
+    {
+      name: "authorization-header-unquoted",
+      regex: "(authorization\\s*[:=]\\s*)([^\"'`\\n\\s]+)",
       replacement: "$1***REDACTED***"
+    },
+    {
+      name: "url-query-tokens",
+      // 例: `...?token=xxx&...` / `...?api_key=xxx`
+      regex: "([?&])(api[_-]?key|token|secret|password|passwd|client[_-]?secret)=([^&\\s\"'`]{6,})",
+      replacement: "$1$2=***REDACTED***"
     }
   ],
   maxFileSizeBytes: 512 * 1024,
   generateAiReadme: true
 };
 
+function assertWithinRepoRoot(absPath, rootAbsPath, label, { disallowRepoRoot = false } = {}) {
+  const abs = path.resolve(absPath);
+  const rootAbs = path.resolve(rootAbsPath);
+
+  // `path.relative` が `..` もしくは絶対パスを返す場合は repoRoot を脱出している。
+  const rel = path.relative(rootAbs, abs);
+  if (rel.startsWith("..") || path.isAbsolute(rel)) {
+    throw new Error(`[SECURITY] ${label} escapes repoRoot: ${abs}`);
+  }
+
+  // `outDirAbs === repoRoot` のようなケースは recursive rm の事故につながるため拒否。
+  if (disallowRepoRoot) {
+    const isRepoRoot = rel === "" || rel === ".";
+    if (isRepoRoot) {
+      throw new Error(`[SECURITY] ${label} must not be repoRoot: ${abs}`);
+    }
+  }
+}
+
 async function main() {
-  const config = await loadConfig();
+  const { config, warnings: configWarnings } = await loadConfig();
   const sourceDirAbs = path.join(repoRoot, config.sourceDir);
   const outDirAbs = path.join(repoRoot, config.outDir);
+
+  assertWithinRepoRoot(sourceDirAbs, repoRoot, "sourceDir");
+  assertWithinRepoRoot(outDirAbs, repoRoot, "outDir", { disallowRepoRoot: true });
 
   await ensureExists(sourceDirAbs, `sourceDir not found: ${config.sourceDir}`);
   await cleanDir(outDirAbs);
@@ -108,12 +155,21 @@ async function main() {
     warnings: []
   };
 
+  const staticWarnings = [
+    "[NOTICE] secrets は完全には検出できません。必ず `manifest.json` を人間が確認してください。",
+    "[NOTICE] 設定の配列（例: `redactTextPatterns` / `excludeFilePatterns`）はデフォルトと結合されます。空配列でも既定が無効化されません。",
+    "[NOTICE] 出力には lock ファイル等が含まれる可能性があります。URL パラメータやトークンが含まれた場合は、必ず `manifest.json` の `redactedFiles` を確認してください。"
+  ];
+  const allWarnings = [...configWarnings, ...staticWarnings];
+  manifest.warnings.push(...allWarnings);
+  for (const w of allWarnings) console.warn(w);
+
   const includeExtSet = new Set(config.includeExtensions.map(normalizeExt));
   const excludeDirSet = new Set(config.excludeDirs);
   const excludeFileRegexes = config.excludeFilePatterns.map((p) => new RegExp(p, "i"));
   const redactRules = config.redactTextPatterns.map((r) => ({
     name: r.name,
-    regex: new RegExp(r.regex, "g"),
+    regex: new RegExp(r.regex, "gi"),
     replacement: r.replacement
   }));
 
@@ -160,16 +216,36 @@ async function main() {
   console.log(`Skipped files: ${manifest.skippedFiles.length}`);
 
   if (manifest.warnings.length > 0) {
-    console.log("\nWarnings:");
-    for (const w of manifest.warnings) console.log(`- ${w}`);
+    console.log(`\nWarnings: ${manifest.warnings.length} item(s) (see stdout above).`);
   }
 }
 
 async function loadConfig() {
-  if (!(await exists(configPath))) return defaultConfig;
+  if (!(await exists(configPath))) {
+    return { config: defaultConfig, warnings: [] };
+  }
   const raw = await fs.readFile(configPath, "utf8");
-  const userConfig = JSON.parse(raw);
-  return deepMerge(defaultConfig, userConfig);
+  let userConfig;
+  try {
+    userConfig = JSON.parse(raw);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`[SECURITY] Invalid JSON in ${configPath}: ${msg}`);
+  }
+  if (typeof userConfig !== "object" || userConfig === null || Array.isArray(userConfig)) {
+    throw new Error(`[SECURITY] ${configPath} must be a JSON object.`);
+  }
+
+  const warnings = [];
+  for (const key of ["excludeFilePatterns", "redactTextPatterns", "excludeDirs", "includeExtensions", "includeFiles"]) {
+    if (Object.prototype.hasOwnProperty.call(userConfig, key) && Array.isArray(userConfig[key]) && userConfig[key].length === 0) {
+      warnings.push(
+        `[NOTICE] ${key} を空配列にしてもデフォルトは維持されます（安全のため既定は concat マージします）。`
+      );
+    }
+  }
+
+  return { config: deepMerge(defaultConfig, userConfig), warnings };
 }
 
 async function walkAndCopy({
@@ -266,7 +342,6 @@ async function copyOneFile({
   }
 
   let text = content.toString("utf8");
-  const originalHash = sha256(text);
   let redacted = false;
 
   for (const rule of redactRules) {
@@ -283,7 +358,6 @@ async function copyOneFile({
   if (redacted) {
     manifest.redactedFiles.push({
       file: relFromRepo(destAbs),
-      beforeSha256: originalHash,
       afterSha256: sha256(text)
     });
   }
@@ -372,7 +446,21 @@ function relFromRepo(absPath) {
 }
 
 function deepMerge(base, override) {
+  if (Array.isArray(base) && Array.isArray(override)) {
+    // 配列を「上書き」すると既定のセキュリティルールが無効化され得るため、concat で保護する。
+    const seen = new Set();
+    const out = [];
+    for (const item of [...base, ...override]) {
+      const key = typeof item === "string" ? `s:${item}` : `j:${JSON.stringify(item)}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(item);
+      }
+    }
+    return out;
+  }
   if (Array.isArray(base) || Array.isArray(override)) {
+    // 型が変わっている場合は上書き（ただし null/undefined は base を維持）。
     return override ?? base;
   }
   if (typeof base !== "object" || base === null) return override ?? base;
