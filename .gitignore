@@ -1,0 +1,12 @@
+# Node / deps
+node_modules/
+
+# Tool output (exported context)
+.ai-context/
+
+# Cursor internal
+.cursor/
+
+# Local user config (commit only the example)
+.gemini-export.json
+
