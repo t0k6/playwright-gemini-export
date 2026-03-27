@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "export:gemini:pw": "node ./tools/export-gemini-playwright-context.mjs"
+    "export:gemini:pw": "node ./tools/export-gemini-playwright-context.mjs",
+    "export:gemini:pw:check": "node ./tools/export-gemini-playwright-context.mjs --check"
   },
   "dependencies": {
     "yaml": "^2.8.3"

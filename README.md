@@ -43,7 +43,7 @@ npm run export:gemini:pw
 ### dry-run（書き込みなし）
 
 ```bash
-node ./tools/export-gemini-playwright-context.mjs --check
+npm run export:gemini:pw:check
 ```
 
 ## 出力先
