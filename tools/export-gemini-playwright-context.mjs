@@ -7,6 +7,23 @@ import { createRequire } from "node:module";
 const repoRoot = process.cwd();
 const configPath = path.join(repoRoot, ".gemini-export.json");
 
+function assertWithinRepoRoot(absPath, label, { disallowRepoRoot = false } = {}) {
+  const abs = path.resolve(absPath);
+  const rootAbs = path.resolve(repoRoot);
+
+  const rel = path.relative(rootAbs, abs);
+  if (rel.startsWith("..") || path.isAbsolute(rel)) {
+    throw new Error(`[SECURITY] ${label} escapes repoRoot: ${abs}`);
+  }
+
+  if (disallowRepoRoot) {
+    const isRepoRoot = rel === "" || rel === ".";
+    if (isRepoRoot) {
+      throw new Error(`[SECURITY] ${label} must not be repoRoot: ${abs}`);
+    }
+  }
+}
+
 const defaultConfig = {
   sourcePaths: [],
   outDir: ".ai-context/playwright-gemini",
@@ -79,19 +96,39 @@ const defaultConfig = {
   ],
   redactTextPatterns: [
     {
-      name: "generic-api-key-assignment",
-      regex: "\\b(api[_-]?key|token|secret|password|passwd|client[_-]?secret)\\b\\s*[:=]\\s*[\"'`][^\"'`\\n]{6,}[\"'`]",
-      replacement: "$1 = \"***REDACTED***\""
+      name: "generic-secret-assignment-quoted",
+      regex: "\\b(api[_-]?key|token|secret|password|passwd|client[_-]?secret)\\b\\s*([:=])\\s*[\"'`]([^\"'`\\n]{6,})[\"'`]",
+      replacement: "$1$2\"***REDACTED***\""
+    },
+    {
+      name: "generic-secret-assignment-unquoted",
+      regex: "\\b(api[_-]?key|token|secret|password|passwd|client[_-]?secret)\\b\\s*([:=])\\s*[^\\s\"'`\\n]{6,}",
+      replacement: "$1$2\"***REDACTED***\""
+    },
+    {
+      name: "generic-secret-assignment-backtick-multiline",
+      regex: "\\b(api[_-]?key|token|secret|password|passwd|client[_-]?secret)\\b\\s*([:=])\\s*`[\\s\\S]{6,}?`",
+      replacement: "$1$2\"***REDACTED***\""
     },
     {
       name: "bearer-token",
-      regex: "Bearer\\s+[A-Za-z0-9\\-._~+/]+=*",
+      regex: "bearer\\s+[a-z0-9\\-._~+/]+=*",
       replacement: "Bearer ***REDACTED***"
     },
     {
-      name: "authorization-header",
-      regex: "(authorization\\s*[:=]\\s*[\"'`]?)\\S+",
+      name: "authorization-header-quoted",
+      regex: "(authorization\\s*[:=]\\s*[\"'`])([^\"'`\\n]+)([\"'`])",
+      replacement: "$1***REDACTED***$3"
+    },
+    {
+      name: "authorization-header-unquoted",
+      regex: "(authorization\\s*[:=]\\s*)([^\"'`\\n\\s]+)",
       replacement: "$1***REDACTED***"
+    },
+    {
+      name: "url-query-tokens",
+      regex: "([?&])(api[_-]?key|token|secret|password|passwd|client[_-]?secret)=([^&\\s\"'`]{6,})",
+      replacement: "$1$2=***REDACTED***"
     }
   ],
   maxFileSizeBytes: 512 * 1024,
@@ -127,7 +164,7 @@ async function main() {
     return;
   }
 
-  const config = await loadConfig();
+  const { config, warnings: configWarnings } = await loadConfig();
   validateConfig(config);
 
   const manifest = {
@@ -142,6 +179,14 @@ async function main() {
     anonymizedFiles: [],
     warnings: []
   };
+
+  const staticNotices = [
+    "[NOTICE] secrets は完全には検出できません。必ず `manifest.json` を人間が確認してください。",
+    "[NOTICE] 設定の配列（例: `redactTextPatterns` / `excludeFilePatterns`）はデフォルトと結合されます。空配列でも既定が無効化されません。"
+  ];
+  const initialWarnings = [...configWarnings, ...staticNotices];
+  manifest.warnings.push(...initialWarnings);
+  for (const w of initialWarnings) console.warn(w);
 
   const includeExtSet = new Set(config.includeExtensions.map(normalizeExt));
   const excludeDirSet = new Set(config.excludeDirs);
@@ -158,7 +203,9 @@ async function main() {
 
   const anonymizeConfig = normalizeAnonymizeConfig(config.anonymize);
 
+  assertSafeRelPath(config.outDir);
   const outDirAbs = path.join(repoRoot, config.outDir);
+  assertWithinRepoRoot(outDirAbs, "outDir", { disallowRepoRoot: true });
   if (!checkOnly) {
     await cleanDir(outDirAbs);
     await fs.mkdir(outDirAbs, { recursive: true });
@@ -274,10 +321,31 @@ Options:
 }
 
 async function loadConfig() {
-  if (!(await exists(configPath))) return defaultConfig;
+  if (!(await exists(configPath))) return { config: defaultConfig, warnings: [] };
   const raw = await fs.readFile(configPath, "utf8");
   const userConfig = JSON.parse(raw);
-  return deepMerge(defaultConfig, userConfig);
+
+  const warnings = [];
+  for (const key of [
+    "excludeFilePatterns",
+    "excludePathPatterns",
+    "redactTextPatterns",
+    "excludeDirs",
+    "includeExtensions",
+    "includeFiles"
+  ]) {
+    if (
+      Object.prototype.hasOwnProperty.call(userConfig, key) &&
+      Array.isArray(userConfig[key]) &&
+      userConfig[key].length === 0
+    ) {
+      warnings.push(
+        `[NOTICE] ${key} を空配列にしてもデフォルトは維持されます（安全のため既定は concat マージします）。`
+      );
+    }
+  }
+
+  return { config: deepMerge(defaultConfig, userConfig), warnings };
 }
 
 function validateConfig(config) {
@@ -285,7 +353,9 @@ function validateConfig(config) {
     throw new Error("outDir is required.");
   }
   if (!Array.isArray(config.sourcePaths) || config.sourcePaths.length === 0) {
-    throw new Error("sourcePaths must be a non-empty array.");
+    throw new Error(
+      "sourcePaths must be a non-empty array. Create .gemini-export.json (e.g. copy .gemini-export.example.json) and set sourcePaths."
+    );
   }
   for (const p of config.sourcePaths) {
     assertSafeRelPath(p);
@@ -741,9 +811,19 @@ function getYamlModule(manifest) {
 }
 
 function deepMerge(base, override) {
-  if (Array.isArray(base) || Array.isArray(override)) {
-    return override ?? base;
+  if (Array.isArray(base) && Array.isArray(override)) {
+    const seen = new Set();
+    const out = [];
+    for (const item of [...base, ...override]) {
+      const key = typeof item === "string" ? `s:${item}` : `j:${JSON.stringify(item)}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(item);
+      }
+    }
+    return out;
   }
+  if (Array.isArray(base) || Array.isArray(override)) return override ?? base;
   if (typeof base !== "object" || base === null) return override ?? base;
   if (typeof override !== "object" || override === null) return override ?? base;
 

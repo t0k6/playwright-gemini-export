@@ -86,6 +86,8 @@ node ./tools/export-gemini-playwright-context.mjs --check
 - `fixtures/real` / `fixtures/private` / `auth` / `storageState` などは export しない（設定ミスは warning 扱い）
 - `manifest.json` は毎回人間が確認する
 - warning が出たら無視しない（必要なら `failOnWarnings: true`）
+- 実行時に NOTICE が標準出力されるので、内容を確認する
+- fixture に実データを入れない（sandbox/real を分離する）
 
 ## 推奨運用
 
