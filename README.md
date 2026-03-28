@@ -46,6 +46,17 @@ npm run export:gemini:pw
 npm run export:gemini:pw:check
 ```
 
+## CI での推奨
+
+- **本番相当のリポジトリ**では、パイプラインで `npm run export:gemini:pw`（または先に `export:gemini:pw:check`）を実行し、**`failOnWarnings: true`** を有効にすると、機密っぽい検知・設定ミス・セキュリティ関連スキップを警告のまま放置しにくくなります。設定例の断片は [templates/gemini-export.ci.snippet.json](templates/gemini-export.ci.snippet.json) を参照し、`.gemini-export.json` にマージしてください。
+- ローカルでは `--check` で差分を確認し、問題なければ通常実行、という流れが安全です。
+- `manifest.json` の `warnings` / `skippedFiles` に、次の**固定タグ**が付いた行がないか毎回確認してください（自動検索・レビュー用）。
+  - `[symlink-outside-repo]` … シンボリックリンクがリポジトリ外に解決した、または解決不能
+  - `[path-outside-repo]` … 解決先がリポジトリ外（通常ファイルパス）
+  - `[dest-outside-outDir]` … 出力パスが`outDir`外にならないよう拒否された
+  - `[unsafe-relative-path]` … エクスポート相対パスに`..`セグメントが含まれる
+  - `[realpath-failed]` …`realpath`/`stat`に失敗（壊れたリンクなど）
+
 ## 出力先
 
 ```text
