@@ -8,7 +8,8 @@
     "export:gemini:pw:check": "node ./tools/export-gemini-playwright-context.mjs --check",
     "lint": "npm run lint:js && npm run lint:md",
     "lint:js": "eslint .",
-    "lint:md": "markdownlint-cli2"
+    "lint:md": "markdownlint-cli2",
+    "test": "node --test \"test/**/*.test.mjs\""
   },
   "dependencies": {
     "yaml": "^2.8.3"

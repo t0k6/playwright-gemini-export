@@ -25,6 +25,18 @@ export default defineConfig([
     ...js.configs.recommended,
   },
   {
+    files: ["test/**/*.test.mjs"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: globals.node,
+    },
+  },
+  {
+    files: ["test/**/*.test.mjs"],
+    ...js.configs.recommended,
+  },
+  {
     files: ["**/*.json"],
     plugins: { json },
     language: "json/json",

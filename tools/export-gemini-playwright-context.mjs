@@ -3,38 +3,24 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 import { createRequire } from "node:module";
+import {
+  assertSafeRelPath,
+  assertWithinRepoRoot,
+  applyRedactions,
+  buildRedactRules,
+  deepMerge,
+  isWithinBaseDir,
+  isWithinRepoRoot,
+  matchesAny,
+  normalizeExt,
+  normalizeRelPath,
+  relFromRepo,
+  relPathHasParentSegment,
+  uniqueNormalizedPaths
+} from "./lib/gemini-export-pure.mjs";
 
 const repoRoot = process.cwd();
 const configPath = path.join(repoRoot, ".gemini-export.json");
-
-function assertWithinRepoRoot(absPath, label, { disallowRepoRoot = false } = {}) {
-  const abs = path.resolve(absPath);
-  const rootAbs = path.resolve(repoRoot);
-
-  const rel = path.relative(rootAbs, abs);
-  if (rel.startsWith("..") || path.isAbsolute(rel)) {
-    throw new Error(`[SECURITY] ${label} escapes repoRoot: ${abs}`);
-  }
-
-  if (disallowRepoRoot) {
-    const isRepoRoot = rel === "" || rel === ".";
-    if (isRepoRoot) {
-      throw new Error(`[SECURITY] ${label} must not be repoRoot: ${abs}`);
-    }
-  }
-}
-
-/** True if absPath is under baseAbs (inclusive of base itself). */
-function isWithinBaseDir(absPath, baseAbs) {
-  const abs = path.resolve(absPath);
-  const base = path.resolve(baseAbs);
-  const rel = path.relative(base, abs);
-  return !rel.startsWith("..") && !path.isAbsolute(rel);
-}
-
-function isWithinRepoRoot(absPath) {
-  return isWithinBaseDir(absPath, repoRoot);
-}
 
 async function tryRealpath(absPath) {
   try {
@@ -43,15 +29,6 @@ async function tryRealpath(absPath) {
   } catch {
     return { ok: false };
   }
-}
-
-/** Reject normalized repo-relative paths that contain `..` segments (path traversal in manifest/output). */
-function relPathHasParentSegment(normalizedRel) {
-  return normalizedRel.split("/").some((seg) => seg === "..");
-}
-
-function relFromRepo(absPath) {
-  return normalizeRelPath(path.relative(repoRoot, absPath));
 }
 
 const defaultConfig = {
@@ -222,20 +199,16 @@ async function main() {
   const excludeDirSet = new Set(config.excludeDirs);
   const excludeFileRegexes = config.excludeFilePatterns.map((p) => new RegExp(p, "i"));
   const excludePathRegexes = config.excludePathPatterns.map((p) => new RegExp(p, "i"));
-  const redactRules = config.redactTextPatterns.map((r) => ({
-    name: r.name,
-    regex: new RegExp(r.regex, "gi"),
-    replacement: r.replacement
-  }));
+  const redactRules = buildRedactRules(config.redactTextPatterns);
 
   const effectiveSourcePaths = getEffectiveSourcePaths(config);
   manifest.sourcePaths = effectiveSourcePaths;
 
   const anonymizeConfig = normalizeAnonymizeConfig(config.anonymize);
 
-  assertSafeRelPath(config.outDir);
+  assertSafeRelPath(config.outDir, repoRoot);
   const outDirAbs = path.join(repoRoot, config.outDir);
-  assertWithinRepoRoot(outDirAbs, "outDir", { disallowRepoRoot: true });
+  assertWithinRepoRoot(outDirAbs, repoRoot, "outDir", { disallowRepoRoot: true });
   if (!checkOnly) {
     await cleanDir(outDirAbs);
     await fs.mkdir(outDirAbs, { recursive: true });
@@ -263,7 +236,7 @@ async function main() {
       manifest.skippedFiles.push(`${relPath} ${tag}`);
       continue;
     }
-    if (!isWithinRepoRoot(topReal.path)) {
+    if (!isWithinRepoRoot(topReal.path, repoRoot)) {
       const tag = topIsSymlink ? "[symlink-outside-repo]" : "[path-outside-repo]";
       manifest.warnings.push(`${tag} sourcePath resolves outside repo: ${relPath}`);
       manifest.skippedFiles.push(`${relPath} ${tag}`);
@@ -321,7 +294,7 @@ async function main() {
       manifest.skippedFiles.push(`${relPath} ${tag}`);
       continue;
     }
-    if (!isWithinRepoRoot(incReal.path)) {
+    if (!isWithinRepoRoot(incReal.path, repoRoot)) {
       const tag = incIsSymlink ? "[symlink-outside-repo]" : "[path-outside-repo]";
       manifest.warnings.push(`${tag} includeFiles path resolves outside repo: ${relPath}`);
       manifest.skippedFiles.push(`${relPath} ${tag}`);
@@ -420,11 +393,11 @@ function validateConfig(config) {
     );
   }
   for (const p of config.sourcePaths) {
-    assertSafeRelPath(p);
+    assertSafeRelPath(p, repoRoot);
   }
   if (Array.isArray(config.includeFiles)) {
     for (const p of config.includeFiles) {
-      assertSafeRelPath(p);
+      assertSafeRelPath(p, repoRoot);
     }
   }
 }
@@ -454,7 +427,7 @@ async function walkAndCopy({
     try {
       lstat = await fs.lstat(abs);
     } catch {
-      const relGuess = relFromRepo(abs);
+      const relGuess = relFromRepo(abs, repoRoot);
       manifest.warnings.push(`[realpath-failed] cannot stat path: ${relGuess}`);
       manifest.skippedFiles.push(`${relGuess} [realpath-failed]`);
       continue;
@@ -464,20 +437,20 @@ async function walkAndCopy({
     const realResult = await tryRealpath(abs);
     if (!realResult.ok) {
       const tag = isSymlink ? "[symlink-outside-repo]" : "[realpath-failed]";
-      const relFromRepoPath = relFromRepo(abs);
+      const relFromRepoPath = relFromRepo(abs, repoRoot);
       manifest.warnings.push(`${tag} cannot resolve path: ${relFromRepoPath}`);
       manifest.skippedFiles.push(`${relFromRepoPath} ${tag}`);
       continue;
     }
-    if (!isWithinRepoRoot(realResult.path)) {
+    if (!isWithinRepoRoot(realResult.path, repoRoot)) {
       const tag = isSymlink ? "[symlink-outside-repo]" : "[path-outside-repo]";
-      const relFromRepoPath = relFromRepo(abs);
+      const relFromRepoPath = relFromRepo(abs, repoRoot);
       manifest.warnings.push(`${tag} resolves outside repo: ${relFromRepoPath}`);
       manifest.skippedFiles.push(`${relFromRepoPath} ${tag}`);
       continue;
     }
 
-    const relFromRepoPath = relFromRepo(abs);
+    const relFromRepoPath = relFromRepo(abs, repoRoot);
     if (relPathHasParentSegment(relFromRepoPath)) {
       manifest.warnings.push(`[unsafe-relative-path] path has parent segments: ${relFromRepoPath}`);
       manifest.skippedFiles.push(`${relFromRepoPath} [unsafe-relative-path]`);
@@ -601,7 +574,7 @@ async function copyOneFile({
     manifest.skippedFiles.push(`${normalizedRel} ${tag}`);
     return;
   }
-  if (!isWithinRepoRoot(srcReal.path)) {
+  if (!isWithinRepoRoot(srcReal.path, repoRoot)) {
     const tag = srcIsSymlink ? "[symlink-outside-repo]" : "[path-outside-repo]";
     manifest.warnings.push(`${tag} source resolves outside repo: ${normalizedRel}`);
     manifest.skippedFiles.push(`${normalizedRel} ${tag}`);
@@ -629,16 +602,8 @@ async function copyOneFile({
   }
 
   const originalHash = sha256(text);
-  let redacted = false;
-
-  for (const rule of redactRules) {
-    const next = text.replace(rule.regex, rule.replacement);
-    if (next !== text) {
-      redacted = true;
-      text = next;
-    }
-  }
-
+  const { text: afterRedact, redacted } = applyRedactions(text, redactRules);
+  text = afterRedact;
   const afterRedactHash = sha256(text);
 
   let anonymized = false;
@@ -741,10 +706,6 @@ ${manifest.sourcePaths.map((p) => `- \`${p}\``).join("\n")}
 `;
 }
 
-function normalizeExt(ext) {
-  return ext.toLowerCase();
-}
-
 async function cleanDir(dir) {
   await fs.rm(dir, { recursive: true, force: true });
 }
@@ -760,39 +721,6 @@ async function exists(absPath) {
 
 function sha256(text) {
   return crypto.createHash("sha256").update(text).digest("hex");
-}
-
-function uniqueNormalizedPaths(paths) {
-  return [...new Set(paths.map(normalizeRelPath))];
-}
-
-function normalizeRelPath(p) {
-  return p.split(path.sep).join("/").replace(/^\.\/+/, "").replace(/\/+$/, "");
-}
-
-function assertSafeRelPath(p) {
-  if (typeof p !== "string" || p.length === 0) {
-    throw new Error("sourcePaths entries must be non-empty strings.");
-  }
-  if (path.isAbsolute(p)) {
-    throw new Error(`absolute paths are not allowed in sourcePaths: ${p}`);
-  }
-
-  const normalized = normalizeRelPath(p);
-  if (normalized.includes("..")) {
-    throw new Error(`'..' is not allowed in sourcePaths: ${p}`);
-  }
-
-  const resolved = path.resolve(repoRoot, normalized);
-  const rootResolved = path.resolve(repoRoot);
-  const rel = path.relative(rootResolved, resolved);
-  if (rel.startsWith("..") || path.isAbsolute(rel)) {
-    throw new Error(`sourcePath escapes repo root: ${p}`);
-  }
-}
-
-function matchesAny(value, regexes) {
-  return regexes.some((r) => r.test(value));
 }
 
 function looksLikeText(buffer) {
@@ -957,30 +885,6 @@ function getYamlModule(manifest) {
     yamlModuleCache = null;
     return null;
   }
-}
-
-function deepMerge(base, override) {
-  if (Array.isArray(base) && Array.isArray(override)) {
-    const seen = new Set();
-    const out = [];
-    for (const item of [...base, ...override]) {
-      const key = typeof item === "string" ? `s:${item}` : `j:${JSON.stringify(item)}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        out.push(item);
-      }
-    }
-    return out;
-  }
-  if (Array.isArray(base) || Array.isArray(override)) return override ?? base;
-  if (typeof base !== "object" || base === null) return override ?? base;
-  if (typeof override !== "object" || override === null) return override ?? base;
-
-  const out = { ...base };
-  for (const key of Object.keys(override)) {
-    out[key] = key in base ? deepMerge(base[key], override[key]) : override[key];
-  }
-  return out;
 }
 
 main().catch((err) => {
