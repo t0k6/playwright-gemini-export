@@ -99,4 +99,76 @@ describe("export-gemini-playwright-context CLI", () => {
       await fs.rm(tmp, { recursive: true, force: true });
     }
   });
+
+  it("--help exits 0 and prints usage", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
+    try {
+      await copyFixture(tmp);
+      const { code, stdout } = await runExport(tmp, ["--help"]);
+      assert.equal(code, 0);
+      assert.match(stdout, /Usage:|--check/i);
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("exits non-zero when sourcePaths is empty", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
+    try {
+      await copyFixture(tmp);
+      await fs.writeFile(
+        path.join(tmp, ".gemini-export.json"),
+        JSON.stringify({
+          sourcePaths: [],
+          outDir: ".ai-context/playwright-test-export"
+        }),
+        "utf8"
+      );
+      const { code, stderr } = await runExport(tmp);
+      assert.notEqual(code, 0);
+      assert.match(stderr, /sourcePaths|Error/i);
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("exits non-zero when outDir is empty string", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
+    try {
+      await copyFixture(tmp);
+      await fs.writeFile(
+        path.join(tmp, ".gemini-export.json"),
+        JSON.stringify({
+          sourcePaths: ["src"],
+          outDir: ""
+        }),
+        "utf8"
+      );
+      const { code, stderr } = await runExport(tmp);
+      assert.notEqual(code, 0);
+      assert.match(stderr, /outDir|Error/i);
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("exits with code 2 when failOnWarnings is true", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
+    try {
+      await copyFixture(tmp);
+      const cfg = JSON.parse(
+        await fs.readFile(path.join(tmp, ".gemini-export.json"), "utf8")
+      );
+      cfg.failOnWarnings = true;
+      await fs.writeFile(
+        path.join(tmp, ".gemini-export.json"),
+        JSON.stringify(cfg),
+        "utf8"
+      );
+      const { code, stderr } = await runExport(tmp);
+      assert.equal(code, 2, stderr);
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
 });

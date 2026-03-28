@@ -35,4 +35,31 @@ describe("gemini-export repo-path", () => {
       await fs.rm(tmp, { recursive: true, force: true });
     }
   });
+
+  it("resolveWithinRepo rejects symlink whose target is outside repoRoot", async (t) => {
+    const base = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-repo-sym-"));
+    const repoRoot = path.join(base, "repo");
+    const outside = path.join(base, "outside");
+    await fs.mkdir(repoRoot, { recursive: true });
+    await fs.mkdir(outside, { recursive: true });
+    const targetFile = path.join(outside, "secret.txt");
+    await fs.writeFile(targetFile, "x", "utf8");
+    const linkPath = path.join(repoRoot, "link.txt");
+    try {
+      await fs.symlink(targetFile, linkPath);
+    } catch (err) {
+      t.skip(`symlink unavailable: ${String(err?.message ?? err)}`);
+      await fs.rm(base, { recursive: true, force: true });
+      return;
+    }
+    try {
+      const res = await resolveWithinRepo(linkPath, repoRoot);
+      assert.equal(res.ok, false);
+      if (!res.ok) {
+        assert.equal(res.skipTag, "[symlink-outside-repo]");
+      }
+    } finally {
+      await fs.rm(base, { recursive: true, force: true });
+    }
+  });
 });

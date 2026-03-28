@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  anonymizeStructuredText,
   normalizeAnonymizeConfig,
   pseudonymizeValue,
   shouldAnonymize
@@ -61,6 +62,44 @@ describe("gemini-export anonymize", () => {
       const b = pseudonymizeValue("email", "alice@example.com", "fixed-salt");
       assert.equal(a, b);
       assert.match(a, /^user-[0-9a-f]{8}@example\.test$/);
+    });
+  });
+
+  describe("anonymizeStructuredText", () => {
+    it("rewrites nested JSON keys per config", () => {
+      const manifest = { warnings: [] };
+      const cfg = normalizeAnonymizeConfig({
+        enabled: true,
+        salt: "t",
+        keys: ["email"],
+        includeExtensions: [".json"],
+        fixtureSandboxOnly: false
+      });
+      const raw = JSON.stringify({ user: { email: "e@example.com" } }, null, 2);
+      const res = anonymizeStructuredText("any.json", ".json", `${raw}\n`, cfg, manifest);
+      assert.equal(res.didChange, true);
+      assert.ok(res.fieldsChanged.includes("email"));
+      assert.doesNotMatch(res.text, /e@example\.com/);
+    });
+
+    it("anonymizes YAML when yaml module resolves", () => {
+      const manifest = { warnings: [] };
+      const cfg = normalizeAnonymizeConfig({
+        enabled: true,
+        salt: "y",
+        keys: ["email"],
+        includeExtensions: [".yaml"],
+        fixtureSandboxOnly: false
+      });
+      const res = anonymizeStructuredText(
+        "fixtures/sandbox/cfg.yaml",
+        ".yaml",
+        "email: keep@example.com\n",
+        cfg,
+        manifest
+      );
+      assert.equal(res.didChange, true);
+      assert.doesNotMatch(res.text, /keep@example\.com/);
     });
   });
 });
