@@ -12,35 +12,10 @@ import { assertSafeRelPath, uniqueNormalizedPaths } from "./paths.mjs";
 /** 設定ファイル名（リポジトリルート直下）。 */
 export const CONFIG_BASENAME = ".gemini-export.json";
 
-/**
- * オブジェクトは再帰マージ、配列は重複除去付き concat（空配列でも既定を消さない）。
- * @param {unknown} base
- * @param {unknown} override
- * @returns {unknown}
- */
-export function deepMerge(base, override) {
-  if (Array.isArray(base) && Array.isArray(override)) {
-    const seen = new Set();
-    const out = [];
-    for (const item of [...base, ...override]) {
-      const key = typeof item === "string" ? `s:${item}` : `j:${JSON.stringify(item)}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        out.push(item);
-      }
-    }
-    return out;
-  }
-  if (Array.isArray(base) || Array.isArray(override)) return override ?? base;
-  if (typeof base !== "object" || base === null) return override ?? base;
-  if (typeof override !== "object" || override === null) return override ?? base;
+import { deepMerge } from "../lib/gemini-export-pure.mjs";
 
-  const out = { ...base };
-  for (const key of Object.keys(override)) {
-    out[key] = key in base ? deepMerge(base[key], override[key]) : override[key];
-  }
-  return out;
-}
+/** `../lib/gemini-export-pure.mjs` からの再エクスポート（`loadConfig` とテストで共有）。 */
+export { deepMerge };
 
 /**
  * リポジトリルートの設定を読み、既定とマージする。

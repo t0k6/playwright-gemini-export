@@ -15,6 +15,7 @@ import {
   matchesAny,
   normalizeExt
 } from "./paths.mjs";
+import { buildRedactRules } from "../lib/gemini-export-pure.mjs";
 import { buildAiReadme } from "./readme.mjs";
 import { resolveWithinRepo } from "./repo-path.mjs";
 
@@ -110,11 +111,7 @@ export async function runCli() {
   const excludeDirSet = new Set(config.excludeDirs);
   const excludeFileRegexes = config.excludeFilePatterns.map((p) => new RegExp(p, "i"));
   const excludePathRegexes = config.excludePathPatterns.map((p) => new RegExp(p, "i"));
-  const redactRules = config.redactTextPatterns.map((r) => ({
-    name: r.name,
-    regex: new RegExp(r.regex, "gi"),
-    replacement: r.replacement
-  }));
+  const redactRules = buildRedactRules(config.redactTextPatterns);
 
   const effectiveSourcePaths = getEffectiveSourcePaths(config);
   manifest.sourcePaths = effectiveSourcePaths;

@@ -2,21 +2,20 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
+import { deepMerge } from "../../tools/gemini-export/config.mjs";
 import {
   assertSafeRelPath,
   assertWithinRepoRoot,
-  applyRedactions,
-  buildRedactRules,
-  deepMerge,
   normalizeRelPath,
   relPathHasParentSegment,
   uniqueNormalizedPaths
-} from "../../tools/lib/gemini-export-pure.mjs";
+} from "../../tools/gemini-export/paths.mjs";
+import { applyRedactions, buildRedactRules } from "../../tools/lib/gemini-export-pure.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const fakeRepoRoot = path.join(__dirname, "_fake_repo_root_marker");
 
-describe("gemini-export-pure", () => {
+describe("gemini-export (paths + config re-exports, pure redact)", () => {
   describe("normalizeRelPath", () => {
     it("flattens separators and trims", () => {
       assert.equal(normalizeRelPath(`a${path.sep}b`), "a/b");

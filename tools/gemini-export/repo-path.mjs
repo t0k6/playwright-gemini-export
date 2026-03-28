@@ -1,6 +1,7 @@
 /**
  * @file realpath 解決と「リポジトリ内に留まるか」の共通判定。
  * walk / copy / CLI で繰り返していた symlink とタグ付けを集約する。
+ * 文字列パス論理は `paths.mjs`（→ pure）、ここは fs ベースの解決のみ。
  */
 
 import fs from "node:fs/promises";

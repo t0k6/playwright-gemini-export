@@ -5,6 +5,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { applyRedactions } from "../lib/gemini-export-pure.mjs";
 import { anonymizeStructuredText, shouldAnonymize } from "./anonymize.mjs";
 import {
   isWithinBaseDir,
@@ -208,16 +209,8 @@ export async function copyOneFile(ctx, { srcAbs, relSourcePath, isExplicitInclud
   }
 
   const originalHash = sha256(text);
-  let redacted = false;
-
-  for (const rule of redactRules) {
-    const next = text.replace(rule.regex, rule.replacement);
-    if (next !== text) {
-      redacted = true;
-      text = next;
-    }
-  }
-
+  const { text: textAfterRedact, redacted } = applyRedactions(text, redactRules);
+  text = textAfterRedact;
   const afterRedactHash = sha256(text);
 
   let anonymized = false;
