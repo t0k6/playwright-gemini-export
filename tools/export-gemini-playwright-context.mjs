@@ -24,6 +24,36 @@ function assertWithinRepoRoot(absPath, label, { disallowRepoRoot = false } = {})
   }
 }
 
+/** True if absPath is under baseAbs (inclusive of base itself). */
+function isWithinBaseDir(absPath, baseAbs) {
+  const abs = path.resolve(absPath);
+  const base = path.resolve(baseAbs);
+  const rel = path.relative(base, abs);
+  return !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
+function isWithinRepoRoot(absPath) {
+  return isWithinBaseDir(absPath, repoRoot);
+}
+
+async function tryRealpath(absPath) {
+  try {
+    const resolved = await fs.realpath(absPath);
+    return { ok: true, path: resolved };
+  } catch {
+    return { ok: false };
+  }
+}
+
+/** Reject normalized repo-relative paths that contain `..` segments (path traversal in manifest/output). */
+function relPathHasParentSegment(normalizedRel) {
+  return normalizedRel.split("/").some((seg) => seg === "..");
+}
+
+function relFromRepo(absPath) {
+  return normalizeRelPath(path.relative(repoRoot, absPath));
+}
+
 const defaultConfig = {
   sourcePaths: [],
   outDir: ".ai-context/playwright-gemini",
@@ -224,6 +254,22 @@ async function main() {
       continue;
     }
 
+    const topLstat = await fs.lstat(absPath);
+    const topIsSymlink = topLstat.isSymbolicLink();
+    const topReal = await tryRealpath(absPath);
+    if (!topReal.ok) {
+      const tag = topIsSymlink ? "[symlink-outside-repo]" : "[realpath-failed]";
+      manifest.warnings.push(`${tag} cannot resolve sourcePath: ${relPath}`);
+      manifest.skippedFiles.push(`${relPath} ${tag}`);
+      continue;
+    }
+    if (!isWithinRepoRoot(topReal.path)) {
+      const tag = topIsSymlink ? "[symlink-outside-repo]" : "[path-outside-repo]";
+      manifest.warnings.push(`${tag} sourcePath resolves outside repo: ${relPath}`);
+      manifest.skippedFiles.push(`${relPath} ${tag}`);
+      continue;
+    }
+
     const st = await fs.stat(absPath);
     if (st.isDirectory()) {
       await walkAndCopy({
@@ -265,6 +311,22 @@ async function main() {
   for (const relPath of config.includeFiles) {
     const absPath = path.join(repoRoot, relPath);
     if (!(await exists(absPath))) continue;
+
+    const incLstat = await fs.lstat(absPath);
+    const incIsSymlink = incLstat.isSymbolicLink();
+    const incReal = await tryRealpath(absPath);
+    if (!incReal.ok) {
+      const tag = incIsSymlink ? "[symlink-outside-repo]" : "[realpath-failed]";
+      manifest.warnings.push(`${tag} cannot resolve includeFiles path: ${relPath}`);
+      manifest.skippedFiles.push(`${relPath} ${tag}`);
+      continue;
+    }
+    if (!isWithinRepoRoot(incReal.path)) {
+      const tag = incIsSymlink ? "[symlink-outside-repo]" : "[path-outside-repo]";
+      manifest.warnings.push(`${tag} includeFiles path resolves outside repo: ${relPath}`);
+      manifest.skippedFiles.push(`${relPath} ${tag}`);
+      continue;
+    }
 
     await copyOneFile({
       srcAbs: absPath,
@@ -360,6 +422,11 @@ function validateConfig(config) {
   for (const p of config.sourcePaths) {
     assertSafeRelPath(p);
   }
+  if (Array.isArray(config.includeFiles)) {
+    for (const p of config.includeFiles) {
+      assertSafeRelPath(p);
+    }
+  }
 }
 
 function getEffectiveSourcePaths(config) {
@@ -383,9 +450,50 @@ async function walkAndCopy({
 
   for (const entry of entries) {
     const abs = path.join(currentAbs, entry.name);
-    const relFromRepoPath = normalizeRelPath(path.relative(repoRoot, abs));
+    let lstat;
+    try {
+      lstat = await fs.lstat(abs);
+    } catch {
+      const relGuess = relFromRepo(abs);
+      manifest.warnings.push(`[realpath-failed] cannot stat path: ${relGuess}`);
+      manifest.skippedFiles.push(`${relGuess} [realpath-failed]`);
+      continue;
+    }
+    const isSymlink = lstat.isSymbolicLink();
 
-    if (entry.isDirectory()) {
+    const realResult = await tryRealpath(abs);
+    if (!realResult.ok) {
+      const tag = isSymlink ? "[symlink-outside-repo]" : "[realpath-failed]";
+      const relFromRepoPath = relFromRepo(abs);
+      manifest.warnings.push(`${tag} cannot resolve path: ${relFromRepoPath}`);
+      manifest.skippedFiles.push(`${relFromRepoPath} ${tag}`);
+      continue;
+    }
+    if (!isWithinRepoRoot(realResult.path)) {
+      const tag = isSymlink ? "[symlink-outside-repo]" : "[path-outside-repo]";
+      const relFromRepoPath = relFromRepo(abs);
+      manifest.warnings.push(`${tag} resolves outside repo: ${relFromRepoPath}`);
+      manifest.skippedFiles.push(`${relFromRepoPath} ${tag}`);
+      continue;
+    }
+
+    const relFromRepoPath = relFromRepo(abs);
+    if (relPathHasParentSegment(relFromRepoPath)) {
+      manifest.warnings.push(`[unsafe-relative-path] path has parent segments: ${relFromRepoPath}`);
+      manifest.skippedFiles.push(`${relFromRepoPath} [unsafe-relative-path]`);
+      continue;
+    }
+
+    let stTarget;
+    try {
+      stTarget = await fs.stat(realResult.path);
+    } catch {
+      manifest.warnings.push(`[realpath-failed] cannot stat resolved path: ${relFromRepoPath}`);
+      manifest.skippedFiles.push(`${relFromRepoPath} [realpath-failed]`);
+      continue;
+    }
+
+    if (stTarget.isDirectory()) {
       if (excludeDirSet.has(entry.name)) {
         manifest.skippedFiles.push(`${relFromRepoPath}/ [excluded dir]`);
         continue;
@@ -410,24 +518,24 @@ async function walkAndCopy({
       continue;
     }
 
-    if (!entry.isFile()) {
-      manifest.skippedFiles.push(`${relFromRepoPath} [not regular file]`);
+    if (stTarget.isFile()) {
+      await copyOneFile({
+        srcAbs: abs,
+        relSourcePath: relFromRepoPath,
+        outDirAbs,
+        includeExtSet,
+        excludeFileRegexes,
+        excludePathRegexes,
+        redactRules,
+        maxFileSizeBytes,
+        manifest,
+        checkOnly,
+        anonymizeConfig
+      });
       continue;
     }
 
-    await copyOneFile({
-      srcAbs: abs,
-      relSourcePath: relFromRepoPath,
-      outDirAbs,
-      includeExtSet,
-      excludeFileRegexes,
-      excludePathRegexes,
-      redactRules,
-      maxFileSizeBytes,
-      manifest,
-      checkOnly,
-      anonymizeConfig
-    });
+    manifest.skippedFiles.push(`${relFromRepoPath} [not regular file]`);
   }
 }
 
@@ -449,6 +557,19 @@ async function copyOneFile({
   const basename = path.basename(normalizedRel);
   const ext = normalizeExt(path.extname(normalizedRel));
 
+  if (relPathHasParentSegment(normalizedRel)) {
+    manifest.warnings.push(`[unsafe-relative-path] export path has parent segments: ${normalizedRel}`);
+    manifest.skippedFiles.push(`${normalizedRel} [unsafe-relative-path]`);
+    return;
+  }
+
+  const destAbsPreview = path.join(outDirAbs, normalizedRel);
+  if (!isWithinBaseDir(destAbsPreview, outDirAbs)) {
+    manifest.warnings.push(`[dest-outside-outDir] refused export path: ${normalizedRel}`);
+    manifest.skippedFiles.push(`${normalizedRel} [dest-outside-outDir]`);
+    return;
+  }
+
   if (matchesAny(normalizedRel, excludePathRegexes)) {
     manifest.skippedFiles.push(`${normalizedRel} [excluded path pattern]`);
     return;
@@ -461,6 +582,29 @@ async function copyOneFile({
 
   if (!isExplicitIncludeFile && !includeExtSet.has(ext)) {
     manifest.skippedFiles.push(`${normalizedRel} [extension not included]`);
+    return;
+  }
+
+  let srcLstat;
+  try {
+    srcLstat = await fs.lstat(srcAbs);
+  } catch {
+    manifest.warnings.push(`[realpath-failed] cannot stat source: ${normalizedRel}`);
+    manifest.skippedFiles.push(`${normalizedRel} [realpath-failed]`);
+    return;
+  }
+  const srcIsSymlink = srcLstat.isSymbolicLink();
+  const srcReal = await tryRealpath(srcAbs);
+  if (!srcReal.ok) {
+    const tag = srcIsSymlink ? "[symlink-outside-repo]" : "[realpath-failed]";
+    manifest.warnings.push(`${tag} cannot resolve source: ${normalizedRel}`);
+    manifest.skippedFiles.push(`${normalizedRel} ${tag}`);
+    return;
+  }
+  if (!isWithinRepoRoot(srcReal.path)) {
+    const tag = srcIsSymlink ? "[symlink-outside-repo]" : "[path-outside-repo]";
+    manifest.warnings.push(`${tag} source resolves outside repo: ${normalizedRel}`);
+    manifest.skippedFiles.push(`${normalizedRel} ${tag}`);
     return;
   }
 
@@ -519,6 +663,11 @@ async function copyOneFile({
 
   if (!checkOnly) {
     const destAbs = path.join(outDirAbs, normalizedRel);
+    if (!isWithinBaseDir(destAbs, outDirAbs)) {
+      manifest.warnings.push(`[dest-outside-outDir] refused write at copy time: ${normalizedRel}`);
+      manifest.skippedFiles.push(`${normalizedRel} [dest-outside-outDir]`);
+      return;
+    }
     await fs.mkdir(path.dirname(destAbs), { recursive: true });
     await fs.writeFile(destAbs, text, "utf8");
   }
