@@ -26,11 +26,87 @@ Node.js 18以上を推奨
 
 ## セットアップ
 
-```bash
-cp .gemini-export.example.json .gemini-export.json
+### まず置く場所（共通）
+
+この手順は、**エクスポートしたいPlaywrightプロジェクト（Playwrightのテストを含むリポジトリ）**で実行します。
+迷ったら、そのリポジトリの`package.json`があるフォルダーへ移動してから進めてください。
+モノレポで`package.json`が複数ある場合は、Playwrightのテストが含まれるパッケージ側を選びます。
+次のファイル・ディレクトリは、**コマンドを実行するフォルダー**を基準に置きます。
+
+| 置くもの | 場所（ルートからの相対） | 役割 |
+| --- | --- | --- |
+| `.gemini-export.json` | ルート直下 | allowlist などの設定（必須。ない場合は内蔵デフォルトとマージ） |
+| `tools/` 一式 | `tools/export-gemini-playwright-context.mjs` ほか | CLI 本体（自プロジェクトへ取り込む場合） |
+| 出力 | 既定では `.ai-context/playwright-gemini/`（`outDir` で変更可） | Gemini に渡す成果物（`.gitignore` 推奨） |
+
+`sourcePaths` や `outDir` に書くパスは、**いずれもコマンドを実行するフォルダーからの相対パス**です。
+
+### 実行場所ごとの例（モノレポルート / `playwright/`）
+
+`sourcePaths` の書き方は、**どこでコマンドを実行するか**で変わります。まずは、次のどちらで運用するかを決めてください。
+
+#### 例A: モノレポルートで実行する（`playwright/` が直下にある）
+
+- **実行する場所**: モノレポのルート
+- **`sourcePaths` の例**: `playwright/` で始める
+
+`.gemini-export.example.json` は、この例A（モノレポルート実行）を想定したサンプルです。
+
+```json
+{
+  "sourcePaths": [
+    "playwright/tests",
+    "playwright/pages",
+    "playwright/helpers",
+    "playwright/fixtures/sandbox",
+    "playwright/playwright.config.ts",
+    "playwright/AI_CONTEXT.md"
+  ],
+  "outDir": ".ai-context/playwright-gemini"
+}
 ```
 
-必要に応じて`sourcePaths`を修正する。
+#### 例B: `playwright/` で実行する（設定・出力も `playwright/` 配下に閉じる）
+
+- **実行する場所**: `playwright/` ディレクトリ
+- **`sourcePaths` の例**: `playwright/` を付けない
+
+```json
+{
+  "sourcePaths": [
+    "tests",
+    "pages",
+    "helpers",
+    "fixtures/sandbox",
+    "playwright.config.ts",
+    "AI_CONTEXT.md"
+  ],
+  "outDir": ".ai-context/playwright-gemini"
+}
+```
+
+### パターンA: このリポジトリをクローンして使う
+
+1. GitHubからこのリポジトリを任意の作業フォルダーにクローンする。
+2. クローンしたディレクトリに移動する（以降、このディレクトリがルート）。
+3. `npm install` で依存関係を入れる。
+4. ルートに設定ファイルを作る。`.gemini-export.example.json`をコピーして`.gemini-export.json`という名前で置く。
+5. 必要に応じて`sourcePaths`を修正する（後述の「推奨設定」も参照）。
+6. ルートにいる状態で `npm run export:gemini:pw:check` を試し、問題なければ `npm run export:gemini:pw` を実行する。
+
+本リポジトリではローカル用の `.gemini-export.json` を `.gitignore` しているため、手元では例からコピーして編集してください。
+
+### パターンB: 既存の別プロジェクト（自前の Playwright リポジトリ）に組み込む
+
+npmパッケージとしては公開していない（`package.json` は `private`）ため、**ツールのファイルを対象プロジェクト側へ取り込む**形になります。
+
+1. このリポジトリから **`tools/` ディレクトリ全体**（`export-gemini-playwright-context.mjs`・`gemini-export/`・`lib/`）を、**対象プロジェクトのルート直下**にコピーする（ディレクトリ構成はこのリポジトリと同じ `tools/...` を推奨）。
+2. 対象プロジェクトの `package.json` に、依存として `yaml`（例: `"yaml": "^2.8.3"`）と、`export:gemini:pw` / `export:gemini:pw:check` 用の `scripts` を追加する（中身はこのリポジトリの `package.json` をそのまま流用できる）。
+3. 対象プロジェクトのルートで `npm install` を実行する。
+4. 対象プロジェクトのルートに `.gemini-export.json` を置く（このリポジトリの `.gemini-export.example.json` をコピーしてリネームし、プロジェクトのディレクトリ構成に合わせて `sourcePaths` を編集する）。
+5. **必ず対象プロジェクトのルートに `cd` した状態**で `npm run export:gemini:pw:check` → 問題なければ `npm run export:gemini:pw` を実行する。
+
+チームで設定を共有したい場合は、自プロジェクトの運用に合わせて `.gemini-export.json` をリポジトリにコミットしてよい（機密が含まれないことを確認すること）。
 
 ## 実行
 
@@ -69,7 +145,7 @@ npm run export:gemini:pw:check
 
 まずは`sourceDir`ではなく`sourcePaths`を使う（`sourceDir`は非対応）。
 
-例:
+例（モノレポルートで実行する場合）:
 
 ```json
 {
