@@ -106,5 +106,38 @@ describe("gemini-export (paths + config re-exports, pure redact)", () => {
       assert.match(text, /\*\*\*REDACTED\*\*\*/);
       assert.doesNotMatch(text, /verylongsecrethere/);
     });
+
+    it("does not redact TypeScript type annotations like password: string", () => {
+      const rules = buildRedactRules([
+        {
+          name: "generic-secret-assignment-unquoted",
+          regex:
+            "\\b(api[_-]?key|token|secret|password|passwd|client[_-]?secret)\\b\\s*([:=])\\s*(?!\\b(?:string|number|boolean|any|unknown|never|void|null|undefined|object|bigint|symbol)\\b)[^\\s\"'`\\n]{6,}",
+          replacement: '$1$2"***REDACTED***"'
+        }
+      ]);
+
+      const input = "async login(id: string, password: string) {}\n";
+      const { text, redacted } = applyRedactions(input, rules);
+      assert.equal(redacted, false);
+      assert.equal(text, input);
+    });
+
+    it("still redacts unquoted password assignments that look like secrets", () => {
+      const rules = buildRedactRules([
+        {
+          name: "generic-secret-assignment-unquoted",
+          regex:
+            "\\b(api[_-]?key|token|secret|password|passwd|client[_-]?secret)\\b\\s*([:=])\\s*(?!\\b(?:string|number|boolean|any|unknown|never|void|null|undefined|object|bigint|symbol)\\b)[^\\s\"'`\\n]{6,}",
+          replacement: '$1$2"***REDACTED***"'
+        }
+      ]);
+
+      const input = "password: supersecret123\n";
+      const { text, redacted } = applyRedactions(input, rules);
+      assert.equal(redacted, true);
+      assert.match(text, /\*\*\*REDACTED\*\*\*/);
+      assert.doesNotMatch(text, /supersecret123/);
+    });
   });
 });
