@@ -6,6 +6,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { applyRedactions } from "../lib/gemini-export-pure.mjs";
+import { redactByAst } from "./ast-redact.mjs";
 import { anonymizeStructuredText, shouldAnonymize } from "./anonymize.mjs";
 import {
   isWithinBaseDir,
@@ -209,8 +210,20 @@ export async function copyOneFile(ctx, { srcAbs, relSourcePath, isExplicitInclud
   }
 
   const originalHash = sha256(text);
-  const { text: textAfterRedact, redacted } = applyRedactions(text, redactRules);
-  text = textAfterRedact;
+  let redacted = false;
+  if (includeExtSet.has(ext) && [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"].includes(ext)) {
+    const ast = redactByAst(text, { filePath: normalizedRel });
+    if (ast.parseFailed) {
+      manifest.warnings.push(`[ast-redact-parse-failed] fell back to regex redaction: ${normalizedRel}`);
+    } else if (ast.redacted) {
+      redacted = true;
+      text = ast.text;
+    }
+  }
+
+  const { text: textAfterRegexRedact, redacted: regexRedacted } = applyRedactions(text, redactRules);
+  text = textAfterRegexRedact;
+  redacted = redacted || regexRedacted;
   const afterRedactHash = sha256(text);
 
   let anonymized = false;
