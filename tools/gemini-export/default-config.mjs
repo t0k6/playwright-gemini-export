@@ -84,7 +84,7 @@ export const defaultConfig = {
     {
       name: "generic-secret-assignment-unquoted",
       regex:
-        "\\b(api[_-]?key|token|secret|password|passwd|client[_-]?secret)\\b\\s*([:=])\\s*(?!\\b(?:string|number|boolean|any|unknown|never|void|null|undefined|object|bigint|symbol)\\b)[^\\s\"'`\\n]{6,}",
+        "(?<!\\.)(?:\\b(api[_-]?key|token|secret|password|passwd|client[_-]?secret)\\b)\\s*([:=])\\s*(?!\\b(?:string|number|boolean|any|unknown|never|void|null|undefined|object|bigint|symbol)\\b)(?![A-Za-z_$][\\w$]*[.\\[])[^\\s\"'`\\n]{6,}",
       replacement: "$1$2\"***REDACTED***\""
     },
     {
