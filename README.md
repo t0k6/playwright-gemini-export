@@ -43,7 +43,7 @@ Node.js 18以上を推奨
 
 ### 実行場所ごとの例（モノレポルート / `playwright/`）
 
-`sourcePaths` の書き方は、**どこでコマンドを実行するか**で変わります。まずは、次のどちらで運用するかを決めてください。
+`sourcePaths` の書き方は、**どこでコマンドを実行するか**で変わります。まずは、次の例のいずれで運用するかを決めてください。
 
 #### 例A: モノレポルートで実行する（`playwright/` が直下にある）
 
@@ -85,10 +85,50 @@ Node.js 18以上を推奨
 }
 ```
 
+#### 例C: ツールのルートとモノレポのルートを分ける
+
+モノレポのルートに `package.json` があり、このツール側にも `package.json` や `.gemini-export.json` を置くため、**同じディレクトリに両方を置きたくない**場合の例です。モノレポのチェックアウト先を子フォルダー `workdir/` にまとめ、**常にその親でコマンドを実行**します。
+
+- **実行する場所**: `workdir` の親（例では `export-workspace/`）。このフォルダーに、このリポジトリの `package.json`・`tools/`・`.gemini-export.json` を置く。
+- **`workdir/`**: モノレポのルート（`workdir/playwright/`がPlaywright用のルートになる構成を想定）。Gitのsparse checkoutで`playwright/`だけを展開してもよい。
+- **`sourcePaths`の例**: 例Aと同じ並びだが、先頭に`workdir/`を付ける。
+
+```text
+export-workspace/          ← ここで npm run export（process.cwd() がこのツールのルート）
+  .gemini-export.json
+  package.json
+  tools/
+  workdir/                 ← モノレポのルート
+    playwright/
+      tests/
+      ...
+```
+
+```json
+{
+  "sourcePaths": [
+    "workdir/playwright/tests",
+    "workdir/playwright/pages",
+    "workdir/playwright/helpers",
+    "workdir/playwright/fixtures/sandbox",
+    "workdir/playwright/playwright.config.ts",
+    "workdir/playwright/AI_CONTEXT.md"
+  ],
+  "outDir": ".ai-context/playwright-gemini"
+}
+```
+
+`includeFiles`（ロックファイルや `tsconfig.json` など）も、**すべて実行時のルートからの相対パス**です。モノレポ側のファイルを含めたい場合は、例として `workdir/package.json` のように `workdir/` を付けて列挙してください。
+
+##### 注意
+
+- `export-workspace/gemini-export-playwright/` と `export-workspace/workdir/` を**兄弟**にし、常に前者だけに `cd` して実行すると、モノレポへ向けるパスが `../workdir/...` になります。設定では **`..` を含む相対パスは使えない**ため、この配置のままでは困りがちです。**親を1つにまとめる**（この例Cの形）か、実行時は必ず `workdir` を子として含む親に `cd` してください。
+- リポジトリ外に解決するシンボリックリンクはエクスポート対象外になることがあります（[CI での推奨](#ci-での推奨)の固定タグ `[symlink-outside-repo]` など）。
+
 ### パターンA: このリポジトリをクローンして使う
 
 1. GitHubからこのリポジトリを任意の作業フォルダーにクローンする。
-2. クローンしたディレクトリに移動する（以降、このディレクトリがルート）。
+2. クローンしたディレクトリに移動する（以降、このディレクトリがルート）。モノレポのルートとツールのルートを分けたい場合は、[例C](#例c-ツールのルートとモノレポのルートを分ける) のレイアウトに合わせて親フォルダーへファイルを置き、`workdir/` にモノレポをチェックアウトしてもよい。
 3. `npm install` で依存関係を入れる。
 4. ルートに設定ファイルを作る。`.gemini-export.example.json`をコピーして`.gemini-export.json`という名前で置く。
 5. 必要に応じて`sourcePaths`を修正する（後述の「推奨設定」も参照）。
