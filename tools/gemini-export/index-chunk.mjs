@@ -36,13 +36,13 @@ function languageFromExt(ext) {
 
 /**
  * @param {{
- *   outDirAbs: string,
  *   copiedFiles: string[],
  *   warnings: string[],
  *   indexFiles?: string[],
  *   chunkFiles?: string[],
  *   chunkCount?: number,
- * }} manifest
+ * }} manifest export の `manifest` を直接更新する
+ * @param {string} outDirAbs 出力ディレクトリの絶対パス
  * @param {{
  *   projectIndexFile: string,
  *   pathIndexFile: string,
@@ -52,8 +52,7 @@ function languageFromExt(ext) {
  * }} indexChunkConfig
  * @returns {Promise<void>}
  */
-export async function generateIndexAndChunks(manifest, indexChunkConfig) {
-  const outDirAbs = manifest.outDirAbs;
+export async function generateIndexAndChunks(manifest, outDirAbs, indexChunkConfig) {
   const copiedFiles = Array.isArray(manifest.copiedFiles) ? manifest.copiedFiles : [];
 
   const projectIndexRel = normalizeRelPath(indexChunkConfig.projectIndexFile);

@@ -62,6 +62,14 @@ describe("export-gemini-playwright-context CLI", () => {
       await assert.rejects(() => fs.access(path.join(outRoot, "src", "image.png")), {
         code: "ENOENT"
       });
+
+      await assert.rejects(() => fs.access(path.join(outRoot, "PROJECT_INDEX.md")), {
+        code: "ENOENT"
+      });
+      await assert.rejects(() => fs.access(path.join(outRoot, "PATH_INDEX.jsonl")), {
+        code: "ENOENT"
+      });
+      await assert.rejects(() => fs.access(path.join(outRoot, "chunks")), { code: "ENOENT" });
     } finally {
       await fs.rm(tmp, { recursive: true, force: true });
     }
@@ -90,10 +98,76 @@ describe("export-gemini-playwright-context CLI", () => {
     }
   });
 
+  it("manifest.json and README_FOR_AI reflect indexChunk; PATH_INDEX and chunks have required metadata", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
+    try {
+      await copyFixture(tmp);
+      const cfgPath = path.join(tmp, ".gemini-export.json");
+      const cfg = JSON.parse(await fs.readFile(cfgPath, "utf8"));
+      cfg.indexChunk = { enabled: true, maxChunkBytes: 2048 };
+      cfg.generateAiReadme = true;
+      await fs.writeFile(cfgPath, JSON.stringify(cfg), "utf8");
+
+      const { code, stderr } = await runExport(tmp);
+      assert.equal(code, 0, stderr);
+
+      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      const man = JSON.parse(await fs.readFile(path.join(outRoot, "manifest.json"), "utf8"));
+      assert.ok(Array.isArray(man.indexFiles));
+      assert.ok(man.indexFiles.includes("PROJECT_INDEX.md"));
+      assert.ok(man.indexFiles.includes("PATH_INDEX.jsonl"));
+      assert.ok(Array.isArray(man.chunkFiles));
+      assert.ok(man.chunkCount > 0);
+      assert.equal(man.chunkFiles.length, man.chunkCount);
+
+      const readme = await fs.readFile(path.join(outRoot, "README_FOR_AI.md"), "utf8");
+      assert.match(readme, /chunkCount: [1-9]\d*/);
+      assert.match(readme, /PROJECT_INDEX\.md/);
+      assert.match(readme, /PATH_INDEX\.jsonl/);
+
+      const jsonl = await fs.readFile(path.join(outRoot, "PATH_INDEX.jsonl"), "utf8");
+      const firstLine = jsonl.trim().split("\n").find((l) => l.length > 0);
+      assert.ok(firstLine);
+      const row = JSON.parse(firstLine);
+      assert.ok(typeof row.path === "string" && row.path.length > 0);
+      assert.ok(typeof row.kind === "string");
+      assert.ok(typeof row.ext === "string");
+      assert.ok(typeof row.sizeBytes === "number");
+
+      const chunkDir = path.join(outRoot, "chunks");
+      const chunkName = (await fs.readdir(chunkDir)).find((n) => n.endsWith(".md"));
+      assert.ok(chunkName);
+      const chunkText = await fs.readFile(path.join(chunkDir, chunkName), "utf8");
+      assert.match(chunkText, /^---\r?\n/m);
+      assert.match(chunkText, /^original_path:/m);
+      assert.match(chunkText, /^chunk_id:/m);
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
   it("--check does not create outDir", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
     try {
       await copyFixture(tmp);
+      const { code, stderr } = await runExport(tmp, ["--check"]);
+      assert.equal(code, 0, stderr);
+      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      await assert.rejects(() => fs.access(outRoot), { code: "ENOENT" });
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("--check does not create outDir when indexChunk is enabled", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
+    try {
+      await copyFixture(tmp);
+      const cfgPath = path.join(tmp, ".gemini-export.json");
+      const cfg = JSON.parse(await fs.readFile(cfgPath, "utf8"));
+      cfg.indexChunk = { enabled: true };
+      await fs.writeFile(cfgPath, JSON.stringify(cfg), "utf8");
+
       const { code, stderr } = await runExport(tmp, ["--check"]);
       assert.equal(code, 0, stderr);
       const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");

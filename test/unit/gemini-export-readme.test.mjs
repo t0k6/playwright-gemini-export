@@ -17,5 +17,7 @@ describe("gemini-export readme", () => {
     assert.match(md, /copiedFiles: 2/);
     assert.match(md, /skippedFiles: 1/);
     assert.match(md, /warnings: 1/);
+    assert.match(md, /\(not generated\)/);
+    assert.match(md, /chunkCount: 0/);
   });
 });

@@ -216,10 +216,7 @@ export async function runCli() {
   }
 
   if (config.indexChunk?.enabled && !checkOnly) {
-    await generateIndexAndChunks(
-      { ...manifest, outDirAbs, warnings: manifest.warnings },
-      config.indexChunk
-    );
+    await generateIndexAndChunks(manifest, outDirAbs, config.indexChunk);
   }
 
   if (config.generateAiReadme && !checkOnly) {
