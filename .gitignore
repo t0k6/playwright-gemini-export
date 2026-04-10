@@ -4,10 +4,8 @@ node_modules/
 # Tool output (exported context)
 .ai-context/
 
-# Cursor: 共有ルールのみ追跡（plans 等は除外）
-.cursor/*
-!.cursor/rules/
-!.cursor/rules/**
+# Cursor internal
+.cursor/
 
 # Local user config (commit only the example)
 .gemini-export.json
