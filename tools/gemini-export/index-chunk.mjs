@@ -1,0 +1,180 @@
+/**
+ * @file Export後の outDir から index / chunk を生成する後段フェーズ。
+ */
+
+import fs from "node:fs/promises";
+import path from "node:path";
+
+import { isWithinBaseDir, normalizeExt, normalizeRelPath } from "./paths.mjs";
+import { chunkIdBaseFromRelPath, guessFileKind, splitTextByMaxBytes } from "../lib/gemini-export-pure.mjs";
+
+function languageFromExt(ext) {
+  switch (ext) {
+    case ".ts":
+    case ".tsx":
+      return "ts";
+    case ".js":
+    case ".jsx":
+    case ".mjs":
+    case ".cjs":
+      return "js";
+    case ".json":
+      return "json";
+    case ".yaml":
+    case ".yml":
+      return "yaml";
+    case ".md":
+      return "md";
+    case ".html":
+      return "html";
+    case ".css":
+      return "css";
+    default:
+      return "";
+  }
+}
+
+/**
+ * @param {{
+ *   outDirAbs: string,
+ *   copiedFiles: string[],
+ *   warnings: string[],
+ *   indexFiles?: string[],
+ *   chunkFiles?: string[],
+ *   chunkCount?: number,
+ * }} manifest
+ * @param {{
+ *   projectIndexFile: string,
+ *   pathIndexFile: string,
+ *   chunksDir: string,
+ *   maxChunkBytes: number,
+ *   chunkExtensions?: string[]
+ * }} indexChunkConfig
+ * @returns {Promise<void>}
+ */
+export async function generateIndexAndChunks(manifest, indexChunkConfig) {
+  const outDirAbs = manifest.outDirAbs;
+  const copiedFiles = Array.isArray(manifest.copiedFiles) ? manifest.copiedFiles : [];
+
+  const projectIndexRel = normalizeRelPath(indexChunkConfig.projectIndexFile);
+  const pathIndexRel = normalizeRelPath(indexChunkConfig.pathIndexFile);
+  const chunksDirRel = normalizeRelPath(indexChunkConfig.chunksDir);
+
+  const projectIndexAbs = path.join(outDirAbs, projectIndexRel);
+  const pathIndexAbs = path.join(outDirAbs, pathIndexRel);
+  const chunksDirAbs = path.join(outDirAbs, chunksDirRel);
+
+  for (const [label, abs] of [
+    ["projectIndexFile", projectIndexAbs],
+    ["pathIndexFile", pathIndexAbs],
+    ["chunksDir", chunksDirAbs]
+  ]) {
+    if (!isWithinBaseDir(abs, outDirAbs)) {
+      throw new Error(`[SECURITY] indexChunk.${label} escapes outDir: ${abs}`);
+    }
+  }
+
+  const allowedExts = new Set(
+    (indexChunkConfig.chunkExtensions ?? []).map((e) => normalizeExt(String(e)))
+  );
+
+  const indexLines = [];
+  const projectIndexLines = [];
+  const chunkFiles = [];
+
+  projectIndexLines.push("# PROJECT_INDEX");
+  projectIndexLines.push("");
+  projectIndexLines.push("この出力には、Playwright E2E テストコードのサニタイズ済みサブセットが含まれます。");
+  projectIndexLines.push("");
+  projectIndexLines.push("## 生成物");
+  projectIndexLines.push(`- \`${projectIndexRel}\`: このファイル（入口）`);
+  projectIndexLines.push(`- \`${pathIndexRel}\`: パス索引（JSONL）`);
+  projectIndexLines.push(`- \`${chunksDirRel}/\`: 精読用チャンク`);
+  projectIndexLines.push("");
+  projectIndexLines.push("## 使い方（推奨）");
+  projectIndexLines.push("- Gemini にはまずこのファイルと、必要な `chunks/*` だけを渡します。");
+  projectIndexLines.push("- NotebookLM には `PATH_INDEX.jsonl` を入れて検索起点にします。");
+  projectIndexLines.push("");
+  projectIndexLines.push("## ファイル一覧（抜粋）");
+
+  await fs.mkdir(chunksDirAbs, { recursive: true });
+
+  let totalChunks = 0;
+  for (const rel of copiedFiles) {
+    const relNorm = normalizeRelPath(rel);
+    const ext = normalizeExt(path.extname(relNorm));
+    const abs = path.join(outDirAbs, relNorm);
+    if (!isWithinBaseDir(abs, outDirAbs)) continue;
+
+    let stat;
+    try {
+      stat = await fs.stat(abs);
+    } catch {
+      manifest.warnings.push(`[index-chunk] cannot stat: ${relNorm}`);
+      continue;
+    }
+    if (!stat.isFile()) continue;
+
+    const kind = guessFileKind(relNorm);
+    const row = {
+      path: relNorm,
+      kind,
+      ext,
+      sizeBytes: stat.size,
+      summary: ""
+    };
+    indexLines.push(JSON.stringify(row));
+
+    if (projectIndexLines.length < 120) {
+      projectIndexLines.push(`- \`${relNorm}\` (${kind})`);
+    }
+
+    if (allowedExts.size > 0 && !allowedExts.has(ext)) continue;
+
+    let text;
+    try {
+      text = await fs.readFile(abs, "utf8");
+    } catch {
+      manifest.warnings.push(`[index-chunk] cannot read as text: ${relNorm}`);
+      continue;
+    }
+
+    const chunks = splitTextByMaxBytes(text, { maxChunkBytes: indexChunkConfig.maxChunkBytes });
+    const idBase = chunkIdBaseFromRelPath(relNorm);
+    const lang = languageFromExt(ext);
+
+    for (const c of chunks) {
+      const chunkId = `${idBase}__${String(c.index).padStart(3, "0")}`;
+      const chunkRel = normalizeRelPath(path.join(chunksDirRel, `${chunkId}.md`));
+      const chunkAbs = path.join(outDirAbs, chunkRel);
+      if (!isWithinBaseDir(chunkAbs, outDirAbs)) {
+        manifest.warnings.push(`[index-chunk] refused chunk path: ${chunkRel}`);
+        continue;
+      }
+
+      const header = [
+        "---",
+        `original_path: ${relNorm}`,
+        `chunk_id: ${chunkId}`,
+        "---",
+        ""
+      ].join("\n");
+
+      const fence = lang ? `\`\`\`${lang}` : "```";
+      const body = [header, fence, c.text.replace(/\s+$/u, ""), "```", ""].join("\n");
+      await fs.writeFile(chunkAbs, body, "utf8");
+      chunkFiles.push(chunkRel);
+      totalChunks++;
+    }
+  }
+
+  await fs.writeFile(pathIndexAbs, indexLines.join("\n") + "\n", "utf8");
+  await fs.writeFile(projectIndexAbs, projectIndexLines.join("\n") + "\n", "utf8");
+
+  manifest.indexFiles ??= [];
+  manifest.chunkFiles ??= [];
+  manifest.indexFiles.push(projectIndexRel, pathIndexRel);
+  manifest.chunkFiles.push(...chunkFiles);
+  manifest.chunkCount = totalChunks;
+}
+

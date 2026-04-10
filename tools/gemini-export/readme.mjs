@@ -15,6 +15,8 @@
  * @returns {string}
  */
 export function buildAiReadme(manifest) {
+  const indexFiles = Array.isArray(manifest.indexFiles) ? manifest.indexFiles : [];
+  const chunkCount = typeof manifest.chunkCount === "number" ? manifest.chunkCount : 0;
   return `# README_FOR_AI
 
 ## Purpose
@@ -22,6 +24,10 @@ This export is a sanitized subset of a Playwright E2E test codebase for AI-assis
 
 ## Included scope
 ${manifest.sourcePaths.map((p) => `- \`${p}\``).join("\n")}
+
+## Index and chunks
+- indexFiles: ${indexFiles.length > 0 ? indexFiles.map((p) => `\`${p}\``).join(", ") : "(not generated)"}
+- chunkCount: ${chunkCount}
 
 ## Important constraints
 - Some files and directories are intentionally excluded

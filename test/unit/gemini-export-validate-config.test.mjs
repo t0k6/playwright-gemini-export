@@ -46,4 +46,24 @@ describe("gemini-export validateConfig", () => {
       repoRoot
     );
   });
+
+  it("throws when indexChunk.maxChunkBytes is invalid (enabled)", () => {
+    assert.throws(
+      () =>
+        validateConfig(
+          {
+            ...defaultConfig,
+            sourcePaths: ["src"],
+            outDir: ".ai-context/out",
+            indexChunk: {
+              ...defaultConfig.indexChunk,
+              enabled: true,
+              maxChunkBytes: 0
+            }
+          },
+          repoRoot
+        ),
+      /indexChunk\.maxChunkBytes must be a positive integer/
+    );
+  });
 });

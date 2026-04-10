@@ -7,6 +7,14 @@
 export const defaultConfig = {
   sourcePaths: [],
   outDir: ".ai-context/playwright-gemini",
+  indexChunk: {
+    enabled: false,
+    projectIndexFile: "PROJECT_INDEX.md",
+    pathIndexFile: "PATH_INDEX.jsonl",
+    chunksDir: "chunks",
+    maxChunkBytes: 48 * 1024,
+    chunkExtensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".md", ".json", ".yml", ".yaml", ".txt"]
+  },
   includeExtensions: [
     ".ts",
     ".tsx",

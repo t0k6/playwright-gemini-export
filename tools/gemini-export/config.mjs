@@ -73,6 +73,37 @@ export function validateConfig(config, repoRoot) {
       assertSafeRelPath(p, repoRoot);
     }
   }
+
+  if (typeof config.indexChunk !== "undefined") {
+    if (typeof config.indexChunk !== "object" || config.indexChunk === null) {
+      throw new Error("indexChunk must be an object.");
+    }
+    const ic = config.indexChunk;
+    if (typeof ic.enabled !== "boolean") {
+      throw new Error("indexChunk.enabled must be boolean.");
+    }
+    if (ic.enabled) {
+      for (const key of ["projectIndexFile", "pathIndexFile", "chunksDir"]) {
+        if (typeof ic[key] !== "string" || ic[key].length === 0) {
+          throw new Error(`indexChunk.${key} must be a non-empty string.`);
+        }
+        assertSafeRelPath(ic[key], repoRoot);
+      }
+      if (!Number.isFinite(ic.maxChunkBytes) || !Number.isInteger(ic.maxChunkBytes) || ic.maxChunkBytes <= 0) {
+        throw new Error("indexChunk.maxChunkBytes must be a positive integer.");
+      }
+      if (typeof ic.chunkExtensions !== "undefined") {
+        if (!Array.isArray(ic.chunkExtensions)) {
+          throw new Error("indexChunk.chunkExtensions must be an array.");
+        }
+        for (const ext of ic.chunkExtensions) {
+          if (typeof ext !== "string" || ext.length === 0) {
+            throw new Error("indexChunk.chunkExtensions entries must be non-empty strings.");
+          }
+        }
+      }
+    }
+  }
 }
 
 /**

@@ -124,3 +124,82 @@ export function applyRedactions(text, redactRules) {
   }
   return { text: t, redacted };
 }
+
+/**
+ * Convert a repo-relative path to a stable chunk id base.
+ * @param {string} relPath
+ * @returns {string}
+ */
+export function chunkIdBaseFromRelPath(relPath) {
+  return String(relPath).replace(/[\\/]/g, "__");
+}
+
+/**
+ * Split text into chunks with an approximate UTF-8 byte cap.
+ * Chunk boundaries are line-based to preserve readability.
+ * @param {string} text
+ * @param {{ maxChunkBytes: number }} opts
+ * @returns {{ index: number, text: string }[]}
+ */
+export function splitTextByMaxBytes(text, { maxChunkBytes }) {
+  const lines = String(text).split(/\r?\n/);
+  const chunks = [];
+
+  let buf = "";
+  let bufBytes = 0;
+  let idx = 1;
+
+  const pushChunk = () => {
+    const out = buf.replace(/\s+$/u, "");
+    if (out.length === 0) return;
+    chunks.push({ index: idx++, text: out + "\n" });
+    buf = "";
+    bufBytes = 0;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const lineWithNl = i === lines.length - 1 ? line : `${line}\n`;
+    const lineBytes = Buffer.byteLength(lineWithNl, "utf8");
+
+    if (bufBytes > 0 && bufBytes + lineBytes > maxChunkBytes) {
+      pushChunk();
+    }
+
+    if (lineBytes > maxChunkBytes) {
+      // Fall back to a hard split within a long line.
+      let rest = lineWithNl;
+      while (Buffer.byteLength(rest, "utf8") > maxChunkBytes) {
+        // Rough split by code units; keep it simple for MVP.
+        const slice = rest.slice(0, Math.max(1, Math.floor(rest.length / 2)));
+        chunks.push({ index: idx++, text: slice });
+        rest = rest.slice(slice.length);
+      }
+      buf = rest;
+      bufBytes = Buffer.byteLength(buf, "utf8");
+      continue;
+    }
+
+    buf += lineWithNl;
+    bufBytes += lineBytes;
+  }
+
+  pushChunk();
+  return chunks;
+}
+
+/**
+ * Best-effort kind classification for index output.
+ * @param {string} relPath
+ * @returns {string}
+ */
+export function guessFileKind(relPath) {
+  const p = String(relPath).toLowerCase();
+  if (/(^|\/)tests?\//.test(p) || /(\.|\/)(spec|test)\.(ts|tsx|js|jsx|mjs|cjs)$/.test(p)) return "spec";
+  if (/(^|\/)pages?\//.test(p)) return "page";
+  if (/(^|\/)helpers?\//.test(p) || /(^|\/)utils?\//.test(p)) return "helper";
+  if (/(^|\/)fixtures?\//.test(p)) return "fixture";
+  if (/playwright\.config\.(ts|js|mjs|cjs)$/.test(p) || /(^|\/)tsconfig\.json$/.test(p)) return "config";
+  if (/\.(md|txt)$/.test(p)) return "doc";
+  return "file";
+}

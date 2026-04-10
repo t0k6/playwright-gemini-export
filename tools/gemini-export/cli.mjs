@@ -17,6 +17,7 @@ import {
 } from "./paths.mjs";
 import { buildRedactRules } from "../lib/gemini-export-pure.mjs";
 import { buildAiReadme } from "./readme.mjs";
+import { generateIndexAndChunks } from "./index-chunk.mjs";
 import { resolveWithinRepo } from "./repo-path.mjs";
 
 /**
@@ -90,6 +91,9 @@ export async function runCli() {
     generatedAt: new Date().toISOString(),
     repoRoot,
     outDir: config.outDir,
+    indexFiles: [],
+    chunkFiles: [],
+    chunkCount: 0,
     sourcePaths: [],
     dryRun: checkOnly,
     copiedFiles: [],
@@ -209,6 +213,13 @@ export async function runCli() {
       relSourcePath: relPath,
       isExplicitIncludeFile: true
     });
+  }
+
+  if (config.indexChunk?.enabled && !checkOnly) {
+    await generateIndexAndChunks(
+      { ...manifest, outDirAbs, warnings: manifest.warnings },
+      config.indexChunk
+    );
   }
 
   if (config.generateAiReadme && !checkOnly) {

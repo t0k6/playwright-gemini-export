@@ -67,6 +67,29 @@ describe("export-gemini-playwright-context CLI", () => {
     }
   });
 
+  it("generates PROJECT_INDEX, PATH_INDEX, and chunks when indexChunk is enabled", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
+    try {
+      await copyFixture(tmp);
+      const cfgPath = path.join(tmp, ".gemini-export.json");
+      const cfg = JSON.parse(await fs.readFile(cfgPath, "utf8"));
+      cfg.indexChunk = { enabled: true, maxChunkBytes: 2048 };
+      await fs.writeFile(cfgPath, JSON.stringify(cfg), "utf8");
+
+      const { code, stderr } = await runExport(tmp);
+      assert.equal(code, 0, stderr);
+
+      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      await fs.access(path.join(outRoot, "PROJECT_INDEX.md"));
+      await fs.access(path.join(outRoot, "PATH_INDEX.jsonl"));
+      const chunkDir = path.join(outRoot, "chunks");
+      const entries = await fs.readdir(chunkDir);
+      assert.ok(entries.some((n) => n.endsWith(".md")), `expected chunk md files, got: ${entries.join(",")}`);
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
   it("--check does not create outDir", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
     try {
