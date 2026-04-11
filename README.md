@@ -244,3 +244,5 @@ npm run export:gemini:pw:check -- --pack
 - `AI_CONTEXT.md`を人間が管理する
 - fixtureはsandbox/realを分離する
 - 実際にGeminiに渡す前に出力物をレビューする
+
+今後の拡張の検討項目は [docs/roadmap.md](docs/roadmap.md) にまとめている。
