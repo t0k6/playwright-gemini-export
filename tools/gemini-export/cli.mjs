@@ -16,6 +16,7 @@ import {
   normalizeExt
 } from "./paths.mjs";
 import { buildRedactRules } from "../lib/gemini-export-pure.mjs";
+import { runPack } from "./pack.mjs";
 import { buildAiReadme } from "./readme.mjs";
 import { resolveWithinRepo } from "./repo-path.mjs";
 
@@ -26,10 +27,11 @@ export function printHelp() {
   console.log(`playwright-gemini-export
 
 Usage:
-  node ./tools/export-gemini-playwright-context.mjs [--check]
+  node ./tools/export-gemini-playwright-context.mjs [--check] [--pack]
 
 Options:
   --check   dry-run (no outDir creation, no file writes)
+  --pack    after export, write index/chunk/bundle under outDir/_pack (see docs/gemini-workflow.md)
   --help    show this help
 `);
 }
@@ -78,6 +80,7 @@ export async function runCli() {
   const repoRoot = process.cwd();
   const args = process.argv.slice(2);
   const checkOnly = args.includes("--check");
+  const doPack = args.includes("--pack");
   if (args.includes("-h") || args.includes("--help")) {
     printHelp();
     return;
@@ -215,6 +218,10 @@ export async function runCli() {
     const readmePath = path.join(outDirAbs, "README_FOR_AI.md");
     await fs.writeFile(readmePath, buildAiReadme(manifest), "utf8");
     manifest.copiedFiles.push("README_FOR_AI.md");
+  }
+
+  if (doPack) {
+    await runPack({ repoRoot, outDirAbs, manifest, config, checkOnly });
   }
 
   const stats = {

@@ -152,6 +152,40 @@ describe("export-gemini-playwright-context CLI", () => {
     }
   });
 
+  it("exports with --pack creates _pack artifacts", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
+    try {
+      await copyFixture(tmp);
+      const { code, stderr } = await runExport(tmp, ["--pack"]);
+      assert.equal(code, 0, stderr);
+
+      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      const packRoot = path.join(outRoot, "_pack");
+      await fs.access(path.join(packRoot, "PROJECT_INDEX.md"));
+      await fs.access(path.join(packRoot, "DIRECTORY_TREE.md"));
+      await fs.access(path.join(packRoot, "PATH_INDEX.jsonl"));
+      await fs.access(path.join(packRoot, "chunks", "src__sample.ts.md"));
+      const bundles = await fs.readdir(path.join(packRoot, "bundles"));
+      assert.ok(bundles.some((n) => n.startsWith("bundle-src-other")), bundles.join(","));
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("--check --pack prints dry-run summary without _pack dir", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
+    try {
+      await copyFixture(tmp);
+      const { code, stdout, stderr } = await runExport(tmp, ["--check", "--pack"]);
+      assert.equal(code, 0, stderr);
+      assert.match(stdout, /Pack \(dry-run\)/);
+      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      await assert.rejects(() => fs.access(path.join(outRoot, "_pack")), { code: "ENOENT" });
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
   it("exits with code 2 when failOnWarnings is true", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
     try {

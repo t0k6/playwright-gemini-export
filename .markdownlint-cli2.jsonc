@@ -3,6 +3,6 @@
     "default": true,
     "MD013": false
   },
-  "globs": ["README.md", "templates/**/*.md"],
+  "globs": ["README.md", "docs/**/*.md", "templates/**/*.md"],
   "ignores": ["node_modules/**", ".ai-context/**", ".cursor/**"]
 }

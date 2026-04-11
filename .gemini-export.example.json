@@ -103,5 +103,11 @@
 
   "maxFileSizeBytes": 524288,
   "generateAiReadme": true,
-  "failOnWarnings": false
+  "failOnWarnings": false,
+
+  "pack": {
+    "chunkMaxLines": 300,
+    "bundleGroupDepth": 2,
+    "outSubDir": "_pack"
+  }
 }
