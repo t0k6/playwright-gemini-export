@@ -1,0 +1,67 @@
+---
+name: 統合・2ブランチ比較レビュー
+about: 同一テーマを別計画で実装した2ブランチの比較レビューとマージ方針をまとめる親Issue
+title: "[統合] 比較レビュー: "
+labels: []
+assignees: []
+---
+
+## 対象ブランチ（置き換えてください）
+
+- ベース: `main`（必要なら`develop`などに変更）
+- ブランチA: `REPLACE_BRANCH_A`
+- ブランチB: `REPLACE_BRANCH_B`
+
+## 関連プルリクエスト
+
+- PR-A（A → ベース）: <!-- URL -->
+- PR-B（B → ベース）: <!-- URL -->
+
+## GitHub上の比較（compare）リンク
+
+リポジトリが`OWNER/REPO`のとき、以下の形式で開けます（ブランチ名はURLエンコードが必要な場合があります）。
+
+- `main...REPLACE_BRANCH_A`
+- `main...REPLACE_BRANCH_B`
+- `REPLACE_BRANCH_A...REPLACE_BRANCH_B`（互いの差分。読み方は[docs/github-comparative-review.md](https://github.com/t0k6/playwright-gemini-export/blob/main/docs/github-comparative-review.md)を参照）
+
+## 共通チェックリスト（PRのDescriptionにも同文を貼る）
+
+- [ ] 同一要件に対する重複実装・矛盾する前提はないか
+- [ ] テスト・E2E・手動確認のギャップはないか
+- [ ] 公開インターフェイス（CLI引数、環境変数、JSON形式など）の互換は保てるか
+- [ ] ログ・エラーメッセージ・ユーザー向け文言の一貫性はあるか
+- [ ] マージ後に削除できるデッドコードはないか
+
+## クロスレビュー依頼
+
+[docs/github-comparative-review.md](https://github.com/t0k6/playwright-gemini-export/blob/main/docs/github-comparative-review.md)の「クロスレビュー依頼文」を各PRにコピーし、レビュアーをアサインする。
+
+## 統合・改善計画（統合責任者が記入）
+
+### 要件マッピング
+
+| 要件 | ブランチA | ブランチB |
+|------|-----------|-----------|
+| （例） | | |
+
+### 採用方針
+
+- 主軸ブランチ:
+- Bから取り込む/捨てる/後続PRで再実装:
+
+### マージ順
+
+- （コンフリクト・DBマイグレーション・公開APIの依存から先にマージすべき側を記載）
+
+### 統合後の改善
+
+- （重複削除、命名統一、テスト追加、ドキュメント一本化）
+
+### リスクとロールバック
+
+- （フラグ付きリリース、段階的ロールアウトの要否）
+
+## 決定ログ
+
+- （日付・決定内容・リンク）
