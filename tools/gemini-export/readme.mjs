@@ -12,9 +12,28 @@
  *   skippedFiles: string[],
  *   warnings: string[]
  * }} manifest
+ * @param {{ packOutSubDir?: string }} [opts]
  * @returns {string}
  */
-export function buildAiReadme(manifest) {
+export function buildAiReadme(manifest, opts = {}) {
+  const packOutSubDir = opts.packOutSubDir;
+  const packSection =
+    typeof packOutSubDir === "string" && packOutSubDir.length > 0
+      ? `
+
+## Pack output (index / chunks / bundles)
+This export was produced with \`--pack\`. Use these under \`${packOutSubDir}/\` as the primary entry points for Gemini or NotebookLM:
+
+- \`${packOutSubDir}/PROJECT_INDEX.md\` — file table and tree excerpt
+- \`${packOutSubDir}/DIRECTORY_TREE.md\` — directory tree only
+- \`${packOutSubDir}/PATH_INDEX.jsonl\` — one JSON object per line (machine-readable)
+- \`${packOutSubDir}/chunks/\` — per-file reading chunks (attach as needed)
+- \`${packOutSubDir}/bundles/\` — role- and directory-grouped bundles
+
+See \`docs/gemini-workflow.md\` in this tool repository for suggested usage.
+`
+      : "";
+
   return `# README_FOR_AI
 
 ## Purpose
@@ -34,7 +53,7 @@ ${manifest.sourcePaths.map((p) => `- \`${p}\``).join("\n")}
 - reuse fixtures, helpers, and page objects where possible
 - avoid brittle locators and arbitrary waits
 - state uncertainty when necessary files appear to be omitted
-
+${packSection}
 ## Export summary
 - copiedFiles: ${manifest.copiedFiles.length}
 - redactedFiles: ${manifest.redactedFiles.length}

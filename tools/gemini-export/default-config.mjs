@@ -136,5 +136,11 @@ export const defaultConfig = {
       "accountId",
       "contractId"
     ]
+  },
+  /** `--pack` 用: index / chunk / bundle の既定値。`.gemini-export.json` の `pack` で上書き可能。 */
+  pack: {
+    chunkMaxLines: 300,
+    bundleGroupDepth: 2,
+    outSubDir: "_pack"
   }
 };

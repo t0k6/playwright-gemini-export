@@ -6,6 +6,7 @@
   "scripts": {
     "export:gemini:pw": "node ./tools/export-gemini-playwright-context.mjs",
     "export:gemini:pw:check": "node ./tools/export-gemini-playwright-context.mjs --check",
+    "export:gemini:pw:pack": "node ./tools/export-gemini-playwright-context.mjs --pack",
     "lint": "npm run lint:js && npm run lint:md",
     "lint:js": "eslint .",
     "lint:md": "markdownlint-cli2",

@@ -73,6 +73,36 @@ export function validateConfig(config, repoRoot) {
       assertSafeRelPath(p, repoRoot);
     }
   }
+  if (config.pack && typeof config.pack === "object") {
+    validatePackConfig(config.pack, config.outDir, repoRoot);
+  }
+}
+
+/**
+ * `pack` 設定の検証。
+ * @param {object} pack
+ * @param {string} outDir
+ * @param {string} repoRoot
+ */
+export function validatePackConfig(pack, outDir, repoRoot) {
+  const sub = pack.outSubDir;
+  if (typeof sub !== "string" || sub.length === 0) {
+    throw new Error("pack.outSubDir must be a non-empty string.");
+  }
+  if (sub.includes("..") || sub.includes("/") || sub.includes("\\")) {
+    throw new Error(`pack.outSubDir must be a single path segment (no .. or slashes): ${sub}`);
+  }
+  const combined = path.join(outDir, sub);
+  assertSafeRelPath(combined, repoRoot);
+
+  const maxLines = pack.chunkMaxLines;
+  if (typeof maxLines !== "number" || !Number.isFinite(maxLines) || maxLines < 50 || maxLines > 5000) {
+    throw new Error("pack.chunkMaxLines must be a number between 50 and 5000.");
+  }
+  const depth = pack.bundleGroupDepth;
+  if (typeof depth !== "number" || !Number.isInteger(depth) || depth < 1 || depth > 10) {
+    throw new Error("pack.bundleGroupDepth must be an integer between 1 and 10.");
+  }
 }
 
 /**

@@ -152,6 +152,99 @@ describe("export-gemini-playwright-context CLI", () => {
     }
   });
 
+  it("exports with --pack creates _pack artifacts", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
+    try {
+      await copyFixture(tmp);
+      const { code, stderr } = await runExport(tmp, ["--pack"]);
+      assert.equal(code, 0, stderr);
+
+      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      const packRoot = path.join(outRoot, "_pack");
+      await fs.access(path.join(packRoot, "PROJECT_INDEX.md"));
+      await fs.access(path.join(packRoot, "DIRECTORY_TREE.md"));
+      await fs.access(path.join(packRoot, "PATH_INDEX.jsonl"));
+      await fs.access(path.join(packRoot, "chunks", "src__sample.ts.md"));
+      const bundles = await fs.readdir(path.join(packRoot, "bundles"));
+      assert.ok(bundles.some((n) => n.startsWith("bundle-src-other")), bundles.join(","));
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("--check --pack prints dry-run summary without _pack dir", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
+    try {
+      await copyFixture(tmp);
+      const { code, stdout, stderr } = await runExport(tmp, ["--check", "--pack"]);
+      assert.equal(code, 0, stderr);
+      assert.match(stdout, /Pack \(dry-run\)/);
+      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      await assert.rejects(() => fs.access(path.join(outRoot, "_pack")), { code: "ENOENT" });
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("--pack with generateAiReadme documents _pack in README_FOR_AI", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
+    try {
+      await copyFixture(tmp);
+      const cfgPath = path.join(tmp, ".gemini-export.json");
+      const cfg = JSON.parse(await fs.readFile(cfgPath, "utf8"));
+      cfg.generateAiReadme = true;
+      await fs.writeFile(cfgPath, JSON.stringify(cfg), "utf8");
+
+      const { code, stderr } = await runExport(tmp, ["--pack"]);
+      assert.equal(code, 0, stderr);
+
+      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      const readme = await fs.readFile(path.join(outRoot, "README_FOR_AI.md"), "utf8");
+      assert.match(readme, /Pack output/);
+      assert.match(readme, /`_pack\/PROJECT_INDEX\.md`/);
+      const man = JSON.parse(await fs.readFile(path.join(outRoot, "manifest.json"), "utf8"));
+      assert.ok(man.copiedFiles.some((p) => p.startsWith("_pack/")), man.copiedFiles.join(","));
+      assert.match(readme, /copiedFiles: [1-9]\d*/);
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("does not duplicate copiedFiles when sourcePaths and includeFiles both list package.json", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
+    try {
+      await copyFixture(tmp);
+      await fs.writeFile(path.join(tmp, "package.json"), JSON.stringify({ name: "dup-test" }), "utf8");
+      const cfgPath = path.join(tmp, ".gemini-export.json");
+      const cfg = JSON.parse(await fs.readFile(cfgPath, "utf8"));
+      cfg.sourcePaths = ["src", "package.json"];
+      await fs.writeFile(cfgPath, JSON.stringify(cfg), "utf8");
+
+      const { code, stderr } = await runExport(tmp, ["--pack"]);
+      assert.equal(code, 0, stderr);
+
+      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      const man = JSON.parse(await fs.readFile(path.join(outRoot, "manifest.json"), "utf8"));
+      const pkgEntries = man.copiedFiles.filter((p) => p === "package.json");
+      assert.equal(pkgEntries.length, 1, `expected single package.json, got: ${JSON.stringify(pkgEntries)}`);
+
+      const jsonl = await fs.readFile(path.join(outRoot, "_pack", "PATH_INDEX.jsonl"), "utf8");
+      const pkgRows = jsonl
+        .trim()
+        .split("\n")
+        .filter((line) => {
+          try {
+            return JSON.parse(line).path === "package.json";
+          } catch {
+            return false;
+          }
+        });
+      assert.equal(pkgRows.length, 1);
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
   it("exits with code 2 when failOnWarnings is true", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
     try {

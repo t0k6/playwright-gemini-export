@@ -146,6 +146,10 @@ export async function copyOneFile(ctx, { srcAbs, relSourcePath, isExplicitInclud
   const basename = path.basename(normalizedRel);
   const ext = normalizeExt(path.extname(normalizedRel));
 
+  if (manifest.copiedFiles.includes(normalizedRel)) {
+    return;
+  }
+
   if (relPathHasParentSegment(normalizedRel)) {
     manifest.warnings.push(`[unsafe-relative-path] export path has parent segments: ${normalizedRel}`);
     manifest.skippedFiles.push(`${normalizedRel} [unsafe-relative-path]`);

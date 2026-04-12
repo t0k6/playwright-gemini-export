@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import path from "node:path";
 import { describe, it } from "node:test";
-import { validateConfig } from "../../tools/gemini-export/config.mjs";
+import { validateConfig, validatePackConfig } from "../../tools/gemini-export/config.mjs";
 import { defaultConfig } from "../../tools/gemini-export/default-config.mjs";
 
 const repoRoot = path.resolve("/tmp/gemini-validate-fake-root");
@@ -44,6 +44,30 @@ describe("gemini-export validateConfig", () => {
     validateConfig(
       { ...defaultConfig, sourcePaths: ["src"], outDir: ".ai-context/out" },
       repoRoot
+    );
+  });
+
+  it("throws when pack.outSubDir contains slash", () => {
+    assert.throws(
+      () =>
+        validatePackConfig(
+          { outSubDir: "evil/nested", chunkMaxLines: 300, bundleGroupDepth: 2 },
+          ".ai-context/out",
+          repoRoot
+        ),
+      /pack\.outSubDir|single path segment/
+    );
+  });
+
+  it("throws when pack.chunkMaxLines is out of range", () => {
+    assert.throws(
+      () =>
+        validatePackConfig(
+          { outSubDir: "_pack", chunkMaxLines: 10, bundleGroupDepth: 2 },
+          ".ai-context/out",
+          repoRoot
+        ),
+      /chunkMaxLines/
     );
   });
 });
