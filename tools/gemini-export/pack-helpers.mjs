@@ -135,12 +135,16 @@ export function languageTagFromExt(ext) {
  * @param {string} packOutSubDir
  */
 export function filterPackablePaths(copiedFiles, packOutSubDir) {
+  const seen = new Set();
   const out = [];
   for (const rel of copiedFiles) {
     if (!isPackableRelPath(rel, packOutSubDir)) continue;
     const ext = path.extname(rel);
     if (!isPackableExtension(ext)) continue;
-    out.push(rel.replace(/\\/g, "/"));
+    const n = rel.replace(/\\/g, "/");
+    if (seen.has(n)) continue;
+    seen.add(n);
+    out.push(n);
   }
   return out;
 }

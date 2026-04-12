@@ -214,14 +214,16 @@ export async function runCli() {
     });
   }
 
-  if (config.generateAiReadme && !checkOnly) {
-    const readmePath = path.join(outDirAbs, "README_FOR_AI.md");
-    await fs.writeFile(readmePath, buildAiReadme(manifest), "utf8");
-    manifest.copiedFiles.push("README_FOR_AI.md");
-  }
-
   if (doPack) {
     await runPack({ repoRoot, outDirAbs, manifest, config, checkOnly });
+  }
+
+  if (config.generateAiReadme && !checkOnly) {
+    const readmePath = path.join(outDirAbs, "README_FOR_AI.md");
+    const packOutSubDir =
+      doPack && config.pack && typeof config.pack === "object" ? config.pack.outSubDir : undefined;
+    await fs.writeFile(readmePath, buildAiReadme(manifest, { packOutSubDir }), "utf8");
+    manifest.copiedFiles.push("README_FOR_AI.md");
   }
 
   const stats = {

@@ -18,4 +18,22 @@ describe("gemini-export readme", () => {
     assert.match(md, /skippedFiles: 1/);
     assert.match(md, /warnings: 1/);
   });
+
+  it("buildAiReadme includes pack section when packOutSubDir is set", () => {
+    const md = buildAiReadme(
+      {
+        sourcePaths: ["src"],
+        copiedFiles: ["src/x.ts", "_pack/PROJECT_INDEX.md"],
+        redactedFiles: [],
+        anonymizedFiles: [],
+        skippedFiles: [],
+        warnings: []
+      },
+      { packOutSubDir: "_pack" }
+    );
+    assert.match(md, /Pack output/);
+    assert.match(md, /`_pack\/PROJECT_INDEX\.md`/);
+    assert.match(md, /`_pack\/chunks\/`/);
+    assert.match(md, /`_pack\/bundles\/`/);
+  });
 });

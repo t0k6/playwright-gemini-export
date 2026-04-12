@@ -22,6 +22,12 @@ describe("pack-helpers", () => {
     assert.deepEqual(out, ["src/a.ts", "readme.md"]);
   });
 
+  it("filterPackablePaths deduplicates paths", () => {
+    const list = ["src/a.ts", "src/a.ts", "readme.md", "readme.md"];
+    const out = filterPackablePaths(list, "_pack");
+    assert.deepEqual(out, ["src/a.ts", "readme.md"]);
+  });
+
   it("inferRole detects spec, page, helper, fixture, config", () => {
     assert.equal(inferRole("tests/auth/login.spec.ts"), "spec");
     assert.equal(inferRole("playwright/pages/login.ts"), "page");

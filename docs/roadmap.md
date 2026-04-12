@@ -6,6 +6,15 @@
 
 - [Gemini / NotebookLM 運用ガイド](gemini-workflow.md)
 - [README](../README.md)
+- [pseudo-rag-opus レビュー記録と対応状況](pseudo-rag-opus-review-2026-04-12.md)
+
+## 完了した項目（参考）
+
+次は実装済みのため、ロードマップ本文の「未着手」一覧から外した。
+
+- **統合テスト用フィクスチャ**: `test/fixtures/minimal-repo/.gemini-export.json` の欠落を解消（レビュー指摘 1）
+- **`README_FOR_AI.md` と `--pack`**: pack 実行後に README を生成し、`_pack` 入口の説明を README に含める。`--pack` + `generateAiReadme` の統合テストを追加（レビュー指摘 2）
+- **`copiedFiles` / pack 入力の重複**: `sourcePaths` と `includeFiles` の同一パス重複を export および `filterPackablePaths` で排除（レビュー指摘 3）
 
 ## Phase 1: 品質強化（短期）
 
@@ -19,7 +28,6 @@
 
 ### その他
 
-- **`README_FOR_AI.md` 生成の統合テスト**: 現状のフィクスチャは `generateAiReadme: false` のため、実ファイルが出力されることの検証を追加する
 - **`.gemini-export.example.json`**: `includeExtensions` の重複エントリを整理し、例として読みやすくする
 
 ## Phase 2: Pack 機能の拡張（中期）
