@@ -5,7 +5,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { escapePathForChunkBase, inferRole, languageTagFromExt } from "./pack-helpers.mjs";
+import { escapePathForChunkBase, inferRole, languageTagFromExt, splitLinesForPack } from "./pack-helpers.mjs";
 import { splitTextByMaxBytes } from "../lib/gemini-export-pure.mjs";
 
 /**
@@ -79,7 +79,7 @@ export function buildYamlFrontmatter(fields) {
  * @returns {string[]}
  */
 export function splitTextIntoLineChunks(text, maxLines) {
-  const lines = text.split(/\r?\n/);
+  const lines = splitLinesForPack(text);
   const chunks = [];
   for (let i = 0; i < lines.length; i += maxLines) {
     chunks.push(lines.slice(i, i + maxLines).join("\n"));

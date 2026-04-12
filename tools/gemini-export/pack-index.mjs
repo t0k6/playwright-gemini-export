@@ -5,7 +5,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { inferRole } from "./pack-helpers.mjs";
+import { countLinesForPack, inferRole } from "./pack-helpers.mjs";
 export const PROJECT_INDEX_MAX_ROWS = 120;
 
 /**
@@ -70,7 +70,7 @@ export async function writePackIndex(opts) {
     const abs = path.join(readRootAbs, ...normalized.split("/"));
     const text = await fs.readFile(abs, "utf8");
     const st = await fs.stat(abs);
-    const lineCount = text === "" ? 0 : text.split(/\r?\n/).length;
+    const lineCount = countLinesForPack(text);
     const ext = path.extname(normalized).toLowerCase();
     const role = inferRole(normalized);
     const kind = role;

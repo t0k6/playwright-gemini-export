@@ -7,7 +7,7 @@ import path from "node:path";
 
 import { writePackBundles } from "./pack-bundle.mjs";
 import { writePackChunks } from "./pack-chunk.mjs";
-import { dirKeyFromPath, filterPackablePaths, inferRole } from "./pack-helpers.mjs";
+import { countLinesForPack, dirKeyFromPath, filterPackablePaths, inferRole } from "./pack-helpers.mjs";
 import { writePackIndex } from "./pack-index.mjs";
 import { splitTextByMaxBytes } from "../lib/gemini-export-pure.mjs";
 
@@ -31,7 +31,7 @@ export async function estimatePackSummary(opts) {
       if (chunkMode === "byte") {
         chunkEstimate += splitTextByMaxBytes(text, { maxChunkBytes }).length;
       } else {
-        const lines = text === "" ? 0 : text.split(/\r?\n/).length;
+        const lines = countLinesForPack(text);
         chunkEstimate += Math.max(1, Math.ceil(lines / pack.chunkMaxLines));
       }
     } catch {

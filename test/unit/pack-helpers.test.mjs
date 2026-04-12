@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   bundleFileName,
+  countLinesForPack,
   dirKeyFromPath,
   escapePathForChunkBase,
   filterPackablePaths,
@@ -50,5 +51,11 @@ describe("pack-helpers", () => {
 
   it("bundleFileName combines dirKey and role", () => {
     assert.equal(bundleFileName("tests-auth", "spec"), "bundle-tests-auth-spec.md");
+  });
+
+  it("countLinesForPack ignores synthetic trailing empty line", () => {
+    assert.equal(countLinesForPack("a\nb\n"), 2);
+    assert.equal(countLinesForPack("a\nb"), 2);
+    assert.equal(countLinesForPack(""), 0);
   });
 });

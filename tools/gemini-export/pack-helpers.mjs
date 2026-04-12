@@ -130,6 +130,29 @@ export function languageTagFromExt(ext) {
 }
 
 /**
+ * 末尾改行由来の擬似空行を除いた行配列を返す。
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function splitLinesForPack(text) {
+  const lines = text.split(/\r?\n/);
+  if (lines.length > 1 && lines[lines.length - 1] === "") {
+    lines.pop();
+  }
+  return lines;
+}
+
+/**
+ * Pack 内で統一する行数を返す（末尾改行由来の擬似空行は数えない）。
+ * @param {string} text
+ * @returns {number}
+ */
+export function countLinesForPack(text) {
+  if (text === "") return 0;
+  return splitLinesForPack(text).length;
+}
+
+/**
  * copiedFiles から pack 対象の相対パス一覧を得る。
  * @param {string[]} copiedFiles
  * @param {string} packOutSubDir

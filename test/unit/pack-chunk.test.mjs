@@ -16,6 +16,13 @@ describe("pack-chunk", () => {
     assert.ok(parts[0].includes("a"));
   });
 
+  it("splitTextIntoLineChunks does not create empty tail chunk on terminal newline", () => {
+    const text = "a\nb\n";
+    const parts = splitTextIntoLineChunks(text, 2);
+    assert.equal(parts.length, 1);
+    assert.equal(parts[0], "a\nb");
+  });
+
   it("extractSymbols finds describe and test", () => {
     const src = `describe("Login", () => {
   test('redirects', async () => {});
