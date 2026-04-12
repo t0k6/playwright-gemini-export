@@ -5,6 +5,8 @@ todos: []
 isProject: false
 ---
 
+> **注（2026-04）**: MVPは実装済みである。現状の挙動・残課題の正は [gemini-export-roadmap.md](gemini-export-roadmap.md) および [gemini-index-chunk.md](gemini-index-chunk.md) とする。
+
 # index + chunk 実装計画
 
 ## スコープ

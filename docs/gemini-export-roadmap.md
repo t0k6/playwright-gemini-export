@@ -13,6 +13,10 @@
 - `fixtures/sandbox`向け匿名化
 - `README_FOR_AI.md`と`manifest.json`の生成
 - `indexChunk`設定による`PROJECT_INDEX.md` / `PATH_INDEX.jsonl` / `chunks/`の生成
+- `.gemini-export.json`の`indexChunk.enabled`に加え、CLIの`--index-chunk`で当該実行のみ有効化可能（CLIが設定より優先）
+- `--check`単体では`index + chunk`の成果物はディスクへ書かない。`--check --index-chunk`併用時は標準出力にPATH_INDEX行数・chunk数の概算のみ出す
+- `PROJECT_INDEX.md`のファイル一覧は行数上限があり、超過分は省略行で`PATH_INDEX.jsonl`へ誘導する
+- chunkのYAMLフロントマターに`kind`（`guessFileKind`）を含める
 
 `index + chunk`に関する前回の残タスクは、現状のコードとテストを見る限り解消済みと判断してよい。
 
@@ -20,10 +24,20 @@
 
 - `manifest`は`indexFiles` / `chunkFiles` / `chunkCount`を保持する
 - `README_FOR_AI.md`は`indexFiles`と`chunkCount`を要約する
-- `--check`時は`index + chunk`の追加出力も生成されない
-- integrationテストで`PATH_INDEX.jsonl`とchunk frontmatterの最低限の契約を検証している
+- `--check`単体では`index + chunk`の追加ファイルは生成されない
+- `--check --index-chunk`では概算ログのみ（ファイルは生成しない）
+- integrationテストで`PATH_INDEX.jsonl`とchunkフロントマター（`original_path` / `chunk_id` / `kind`）の契約を検証している
 
 したがって、**`index + chunk`の前回計画に対する残タスクはない**と結論する。
+
+## 今後の課題（計画で見送り・低優先）
+
+次は別イテレーションで扱う想定の項目である（詳細はコードコメントおよび本ロードマップの優先度節を参照）。
+
+- **`bundle`生成本体** … 優先度1として本ロードマップに記載済み
+- **`index-chunk.mjs`のモジュール分割** … 単一モジュール肥大化時にオーケストレータ＋分割を検討
+- **`chunkIdBaseFromRelPath`の衝突リスク** … パス要素に`__`が含まれる場合のID衝突を緩和する余地
+- **長行フォールバックの精密化** … `splitTextByMaxBytes`内の巨大1行向け分割はMVP（低優先で改善可）
 
 ## 目標像
 
@@ -80,7 +94,7 @@
 
 ### 優先度3: chunk 品質の向上
 
-現在のchunk分割はline-basedのMVPであり、安全で単純だが、意味単位としてはまだ粗い。
+現在のchunk分割は、`maxChunkBytes`によるUTF-8バイト上限のもとで行単位にバッファリングするMVPである。安全で単純だが、意味単位としてはまだ粗い。
 
 改善候補:
 
@@ -114,11 +128,15 @@
 
 実運用段階では、設定やdry-runの見やすさも重要になる。
 
-候補:
+実施済みの例:
 
-- `indexChunk`や将来の`bundle`設定をREADMEに反映する
-- dry-runの標準出力に`indexFiles` / `chunkCount`予定値を出す
-- 必要に応じてCLIフラグを増やす
+- `indexChunk`の説明と例を`README.md`および`.gemini-export.example.json`へ反映した
+- `--index-chunk`フラグを追加した
+- `--check --index-chunk`でPATH_INDEX行数・chunk数の概算を標準出力に出す
+
+残りの候補:
+
+- `bundle`実装後にREADMEへ`bundle`設定・出力物を追記する
 - `manifest.json`の要約をより読みやすくする
 
 ### 優先度6: 運用支援ドキュメント
@@ -164,7 +182,7 @@ flowchart TD
 2. `PATH_INDEX.jsonl`の`summary`と`relatedPaths`
 3. chunkの意味単位分割
 4. テンプレート拡充
-5. CLI/config UX改善
+5. CLI/config UX改善（README・`--index-chunk`・dry-run概算は対応済み。残りはmanifest可読性など）
 6. 運用支援ドキュメントの拡充
 
 ## まとめ

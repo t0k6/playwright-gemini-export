@@ -47,6 +47,26 @@ describe("gemini-export validateConfig", () => {
     );
   });
 
+  it("throws when indexChunk.chunksDir escapes repo (enabled)", () => {
+    assert.throws(
+      () =>
+        validateConfig(
+          {
+            ...defaultConfig,
+            sourcePaths: ["src"],
+            outDir: ".ai-context/out",
+            indexChunk: {
+              ...defaultConfig.indexChunk,
+              enabled: true,
+              chunksDir: "../evil-chunks"
+            }
+          },
+          repoRoot
+        ),
+      /not allowed|'..' is not allowed|escapes repo root/
+    );
+  });
+
   it("throws when indexChunk.maxChunkBytes is invalid (enabled)", () => {
     assert.throws(
       () =>

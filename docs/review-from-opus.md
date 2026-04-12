@@ -5,6 +5,8 @@
 > 比較対象: `feature/pseudo-rag-approach/opus`（`3709678`）
 > 日付: 2026-04-12
 
+以降の対応状況と見送り項目は[gemini-export-roadmap.md](gemini-export-roadmap.md)（とくに「今後の課題（計画で見送り・低優先）」）を参照する。
+
 ---
 
 ## 総評

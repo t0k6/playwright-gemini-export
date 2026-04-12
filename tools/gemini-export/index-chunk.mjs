@@ -8,6 +8,9 @@ import path from "node:path";
 import { isWithinBaseDir, normalizeExt, normalizeRelPath } from "./paths.mjs";
 import { chunkIdBaseFromRelPath, guessFileKind, splitTextByMaxBytes } from "../lib/gemini-export-pure.mjs";
 
+/** `PROJECT_INDEX.md` 内の行数上限（ヘッダー＋ファイル行の合計がこの未満ならファイル行を追加）。 */
+export const PROJECT_INDEX_MAX_LINES = 120;
+
 function languageFromExt(ext) {
   switch (ext) {
     case ".ts":
@@ -32,6 +35,58 @@ function languageFromExt(ext) {
     default:
       return "";
   }
+}
+
+/**
+ * `--check` 用: 読み取りルート上のファイルから index 行数・chunk 数を概算する。
+ * @param {{
+ *   readRootAbs: string,
+ *   manifest: { copiedFiles?: string[] },
+ *   indexChunkConfig: { maxChunkBytes: number, chunkExtensions?: string[] }
+ * }} opts
+ * @returns {Promise<{ pathRowCount: number, chunkEstimate: number }>}
+ */
+export async function estimateIndexChunkSummary(opts) {
+  const { readRootAbs, manifest, indexChunkConfig } = opts;
+  const copiedFiles = Array.isArray(manifest.copiedFiles) ? manifest.copiedFiles : [];
+
+  const allowedExts = new Set(
+    (indexChunkConfig.chunkExtensions ?? []).map((e) => normalizeExt(String(e)))
+  );
+
+  let pathRowCount = 0;
+  let chunkEstimate = 0;
+
+  for (const rel of copiedFiles) {
+    const relNorm = normalizeRelPath(rel);
+    const ext = normalizeExt(path.extname(relNorm));
+    const abs = path.join(readRootAbs, relNorm);
+    if (!isWithinBaseDir(abs, readRootAbs)) continue;
+
+    let stat;
+    try {
+      stat = await fs.stat(abs);
+    } catch {
+      continue;
+    }
+    if (!stat.isFile()) continue;
+
+    pathRowCount++;
+
+    if (allowedExts.size > 0 && !allowedExts.has(ext)) continue;
+
+    let text;
+    try {
+      text = await fs.readFile(abs, "utf8");
+    } catch {
+      continue;
+    }
+
+    const chunks = splitTextByMaxBytes(text, { maxChunkBytes: indexChunkConfig.maxChunkBytes });
+    chunkEstimate += chunks.length;
+  }
+
+  return { pathRowCount, chunkEstimate };
 }
 
 /**
@@ -99,6 +154,11 @@ export async function generateIndexAndChunks(manifest, outDirAbs, indexChunkConf
   await fs.mkdir(chunksDirAbs, { recursive: true });
 
   let totalChunks = 0;
+  /** @type {number} `PATH_INDEX.jsonl` に載る通常ファイル数 */
+  let pathIndexFileCount = 0;
+  /** @type {number} `PROJECT_INDEX.md` に箇条書きしたファイル数 */
+  let projectIndexFileListed = 0;
+
   for (const rel of copiedFiles) {
     const relNorm = normalizeRelPath(rel);
     const ext = normalizeExt(path.extname(relNorm));
@@ -114,6 +174,8 @@ export async function generateIndexAndChunks(manifest, outDirAbs, indexChunkConf
     }
     if (!stat.isFile()) continue;
 
+    pathIndexFileCount++;
+
     const kind = guessFileKind(relNorm);
     const row = {
       path: relNorm,
@@ -124,8 +186,9 @@ export async function generateIndexAndChunks(manifest, outDirAbs, indexChunkConf
     };
     indexLines.push(JSON.stringify(row));
 
-    if (projectIndexLines.length < 120) {
+    if (projectIndexLines.length < PROJECT_INDEX_MAX_LINES) {
       projectIndexLines.push(`- \`${relNorm}\` (${kind})`);
+      projectIndexFileListed++;
     }
 
     if (allowedExts.size > 0 && !allowedExts.has(ext)) continue;
@@ -155,6 +218,7 @@ export async function generateIndexAndChunks(manifest, outDirAbs, indexChunkConf
         "---",
         `original_path: ${relNorm}`,
         `chunk_id: ${chunkId}`,
+        `kind: ${kind}`,
         "---",
         ""
       ].join("\n");
@@ -167,6 +231,14 @@ export async function generateIndexAndChunks(manifest, outDirAbs, indexChunkConf
     }
   }
 
+  if (projectIndexFileListed < pathIndexFileCount) {
+    const omitted = pathIndexFileCount - projectIndexFileListed;
+    projectIndexLines.push("");
+    projectIndexLines.push(
+      `**一覧省略**: 通常ファイルは全${pathIndexFileCount}件。本ファイルには先頭${projectIndexFileListed}件のみ掲載。残り${omitted}件は\`${pathIndexRel}\`（PATH_INDEX）を参照。`
+    );
+  }
+
   await fs.writeFile(pathIndexAbs, indexLines.join("\n") + "\n", "utf8");
   await fs.writeFile(projectIndexAbs, projectIndexLines.join("\n") + "\n", "utf8");
 
@@ -176,4 +248,3 @@ export async function generateIndexAndChunks(manifest, outDirAbs, indexChunkConf
   manifest.chunkFiles.push(...chunkFiles);
   manifest.chunkCount = totalChunks;
 }
-
