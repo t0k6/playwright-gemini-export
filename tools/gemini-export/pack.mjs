@@ -9,6 +9,7 @@ import { writePackBundles } from "./pack-bundle.mjs";
 import { writePackChunks } from "./pack-chunk.mjs";
 import { dirKeyFromPath, filterPackablePaths, inferRole } from "./pack-helpers.mjs";
 import { writePackIndex } from "./pack-index.mjs";
+import { splitTextByMaxBytes } from "../lib/gemini-export-pure.mjs";
 
 /**
  * `--check` 時: おおよその chunk 数と bundle 数を見積もる（元ファイルは repoRoot から読む）。
@@ -17,6 +18,8 @@ import { writePackIndex } from "./pack-index.mjs";
 export async function estimatePackSummary(opts) {
   const { repoRoot, manifest, pack } = opts;
   const packable = filterPackablePaths(manifest.copiedFiles, pack.outSubDir);
+  const chunkMode = pack.chunkMode ?? "line";
+  const maxChunkBytes = pack.maxChunkBytes ?? 48 * 1024;
   let chunkEstimate = 0;
   const bundleKeys = new Set();
 
@@ -25,8 +28,12 @@ export async function estimatePackSummary(opts) {
     const abs = path.join(repoRoot, ...normalized.split("/"));
     try {
       const text = await fs.readFile(abs, "utf8");
-      const lines = text === "" ? 0 : text.split(/\r?\n/).length;
-      chunkEstimate += Math.max(1, Math.ceil(lines / pack.chunkMaxLines));
+      if (chunkMode === "byte") {
+        chunkEstimate += splitTextByMaxBytes(text, { maxChunkBytes }).length;
+      } else {
+        const lines = text === "" ? 0 : text.split(/\r?\n/).length;
+        chunkEstimate += Math.max(1, Math.ceil(lines / pack.chunkMaxLines));
+      }
     } catch {
       chunkEstimate += 1;
     }
@@ -105,6 +112,18 @@ export async function runPack(opts) {
       manifest.copiedFiles.push(`${prefix}${c.replace(/\\/g, "/")}`);
     }
   }
+  manifest.indexFiles ??= [];
+  manifest.chunkFiles ??= [];
+  manifest.indexFiles.push(
+    `${prefix}PROJECT_INDEX.md`,
+    `${prefix}DIRECTORY_TREE.md`,
+    `${prefix}PATH_INDEX.jsonl`
+  );
+  for (const r of chunkRecords) {
+    manifest.chunkFiles.push(...r.chunkRelPaths.map((c) => `${prefix}${c.replace(/\\/g, "/")}`));
+  }
+  manifest.chunkCount = manifest.chunkFiles.length;
+
   const bundlesDir = path.join(packRootAbs, "bundles");
   const bundleNames = await fs.readdir(bundlesDir);
   for (const e of bundleNames.sort()) {

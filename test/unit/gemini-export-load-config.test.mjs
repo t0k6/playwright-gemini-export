@@ -28,4 +28,29 @@ describe("gemini-export loadConfig", () => {
       await fs.rm(tmp, { recursive: true, force: true });
     }
   });
+
+  it("merges indexChunk object with defaults", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-loadcfg-"));
+    try {
+      await fs.writeFile(
+        path.join(tmp, CONFIG_BASENAME),
+        JSON.stringify({
+          sourcePaths: ["src"],
+          indexChunk: {
+            enabled: true,
+            maxChunkBytes: 12345
+          }
+        }),
+        "utf8"
+      );
+      const { config } = await loadConfig(tmp);
+      assert.equal(config.indexChunk.enabled, true);
+      assert.equal(config.indexChunk.maxChunkBytes, 12345);
+      assert.equal(typeof config.indexChunk.projectIndexFile, "string");
+      assert.equal(typeof config.indexChunk.pathIndexFile, "string");
+      assert.equal(typeof config.indexChunk.chunksDir, "string");
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
 });

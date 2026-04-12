@@ -7,6 +7,7 @@ import path from "node:path";
 
 import { normalizeAnonymizeConfig } from "./anonymize.mjs";
 import { getEffectiveSourcePaths, loadConfig, validateConfig } from "./config.mjs";
+import { defaultConfig } from "./default-config.mjs";
 import { copyOneFile, walkAndCopy } from "./copy-pipeline.mjs";
 import { cleanDir, exists } from "./fs-utils.mjs";
 import {
@@ -18,6 +19,7 @@ import {
 import { buildRedactRules } from "../lib/gemini-export-pure.mjs";
 import { runPack } from "./pack.mjs";
 import { buildAiReadme } from "./readme.mjs";
+import { estimateIndexChunkSummary, generateIndexAndChunks } from "./index-chunk.mjs";
 import { resolveWithinRepo } from "./repo-path.mjs";
 
 /**
@@ -27,12 +29,13 @@ export function printHelp() {
   console.log(`playwright-gemini-export
 
 Usage:
-  node ./tools/export-gemini-playwright-context.mjs [--check] [--pack]
+  node ./tools/export-gemini-playwright-context.mjs [--check] [--pack] [--index-chunk]
 
 Options:
-  --check   dry-run (no outDir creation, no file writes)
-  --pack    after export, write index/chunk/bundle under outDir/_pack (see docs/gemini-workflow.md)
-  --help    show this help
+  --check        dry-run (no outDir creation, no file writes)
+  --pack         after export, write index/chunk/bundle under outDir/_pack (see docs/gemini-workflow.md)
+  --index-chunk  enable legacy index/chunk phase for this run (overrides indexChunk.enabled=false)
+  --help         show this help
 `);
 }
 
@@ -81,18 +84,28 @@ export async function runCli() {
   const args = process.argv.slice(2);
   const checkOnly = args.includes("--check");
   const doPack = args.includes("--pack");
+  const forceIndexChunk = args.includes("--index-chunk");
   if (args.includes("-h") || args.includes("--help")) {
     printHelp();
     return;
   }
 
   const { config, warnings: configWarnings } = await loadConfig(repoRoot);
-  validateConfig(config, repoRoot);
+  const indexChunkMerged = {
+    ...defaultConfig.indexChunk,
+    ...(config.indexChunk && typeof config.indexChunk === "object" ? config.indexChunk : {}),
+    ...(forceIndexChunk ? { enabled: true } : {})
+  };
+  const configForRun = { ...config, indexChunk: indexChunkMerged };
+  validateConfig(configForRun, repoRoot);
 
   const manifest = {
     generatedAt: new Date().toISOString(),
     repoRoot,
-    outDir: config.outDir,
+    outDir: configForRun.outDir,
+    indexFiles: [],
+    chunkFiles: [],
+    chunkCount: 0,
     sourcePaths: [],
     dryRun: checkOnly,
     copiedFiles: [],
@@ -110,19 +123,19 @@ export async function runCli() {
   manifest.warnings.push(...initialWarnings);
   for (const w of initialWarnings) console.warn(w);
 
-  const includeExtSet = new Set(config.includeExtensions.map(normalizeExt));
-  const excludeDirSet = new Set(config.excludeDirs);
-  const excludeFileRegexes = config.excludeFilePatterns.map((p) => new RegExp(p, "i"));
-  const excludePathRegexes = config.excludePathPatterns.map((p) => new RegExp(p, "i"));
-  const redactRules = buildRedactRules(config.redactTextPatterns);
+  const includeExtSet = new Set(configForRun.includeExtensions.map(normalizeExt));
+  const excludeDirSet = new Set(configForRun.excludeDirs);
+  const excludeFileRegexes = configForRun.excludeFilePatterns.map((p) => new RegExp(p, "i"));
+  const excludePathRegexes = configForRun.excludePathPatterns.map((p) => new RegExp(p, "i"));
+  const redactRules = buildRedactRules(configForRun.redactTextPatterns);
 
-  const effectiveSourcePaths = getEffectiveSourcePaths(config);
+  const effectiveSourcePaths = getEffectiveSourcePaths(configForRun);
   manifest.sourcePaths = effectiveSourcePaths;
 
-  const anonymizeConfig = normalizeAnonymizeConfig(config.anonymize);
+  const anonymizeConfig = normalizeAnonymizeConfig(configForRun.anonymize);
 
-  assertSafeRelPath(config.outDir, repoRoot);
-  const outDirAbs = path.join(repoRoot, config.outDir);
+  assertSafeRelPath(configForRun.outDir, repoRoot);
+  const outDirAbs = path.join(repoRoot, configForRun.outDir);
   assertWithinRepoRoot(outDirAbs, repoRoot, "outDir", { disallowRepoRoot: true });
   if (!checkOnly) {
     await cleanDir(outDirAbs);
@@ -137,7 +150,7 @@ export async function runCli() {
     excludeFileRegexes,
     excludePathRegexes,
     redactRules,
-    maxFileSizeBytes: config.maxFileSizeBytes,
+    maxFileSizeBytes: configForRun.maxFileSizeBytes,
     manifest,
     checkOnly,
     anonymizeConfig
@@ -186,7 +199,7 @@ export async function runCli() {
     manifest.skippedFiles.push(`${relPath} [not file or directory]`);
   }
 
-  for (const relPath of config.includeFiles) {
+  for (const relPath of configForRun.includeFiles) {
     const absPath = path.join(repoRoot, relPath);
     if (!(await exists(absPath))) continue;
 
@@ -214,14 +227,33 @@ export async function runCli() {
     });
   }
 
-  if (doPack) {
-    await runPack({ repoRoot, outDirAbs, manifest, config, checkOnly });
+  // index/chunk は README より先に生成する。README は manifest の index/chunk 集計を反映する。
+  const indexChunkOn = configForRun.indexChunk?.enabled === true;
+  if (indexChunkOn && checkOnly) {
+    const s = await estimateIndexChunkSummary({
+      readRootAbs: repoRoot,
+      manifest,
+      indexChunkConfig: configForRun.indexChunk
+    });
+    const relOut = String(configForRun.outDir).replace(/\\/g, "/");
+    console.log(
+      `Index/chunk (dry-run): PATH_INDEX rows ~${s.pathRowCount}, chunks ~${s.chunkEstimate} (would write under ${relOut}/)`
+    );
+  }
+  if (indexChunkOn && !checkOnly) {
+    await generateIndexAndChunks(manifest, outDirAbs, configForRun.indexChunk);
   }
 
-  if (config.generateAiReadme && !checkOnly) {
+  if (doPack) {
+    await runPack({ repoRoot, outDirAbs, manifest, config: configForRun, checkOnly });
+  }
+
+  if (configForRun.generateAiReadme && !checkOnly) {
     const readmePath = path.join(outDirAbs, "README_FOR_AI.md");
     const packOutSubDir =
-      doPack && config.pack && typeof config.pack === "object" ? config.pack.outSubDir : undefined;
+      doPack && configForRun.pack && typeof configForRun.pack === "object"
+        ? configForRun.pack.outSubDir
+        : undefined;
     await fs.writeFile(readmePath, buildAiReadme(manifest, { packOutSubDir }), "utf8");
     manifest.copiedFiles.push("README_FOR_AI.md");
   }
@@ -239,9 +271,9 @@ export async function runCli() {
     await fs.writeFile(manifestPath, JSON.stringify({ ...manifest, stats }, null, 2), "utf8");
   }
 
-  printSummary(config, manifest, stats);
+  printSummary(configForRun, manifest, stats);
 
-  if (config.failOnWarnings && manifest.warnings.length > 0) {
+  if (configForRun.failOnWarnings && manifest.warnings.length > 0) {
     process.exitCode = 2;
   }
 }

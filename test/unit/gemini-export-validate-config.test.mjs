@@ -70,4 +70,44 @@ describe("gemini-export validateConfig", () => {
       /chunkMaxLines/
     );
   });
+
+  it("throws when indexChunk.chunksDir escapes repo (enabled)", () => {
+    assert.throws(
+      () =>
+        validateConfig(
+          {
+            ...defaultConfig,
+            sourcePaths: ["src"],
+            outDir: ".ai-context/out",
+            indexChunk: {
+              ...defaultConfig.indexChunk,
+              enabled: true,
+              chunksDir: "../evil-chunks"
+            }
+          },
+          repoRoot
+        ),
+      /not allowed|'..' is not allowed|escapes repo root/
+    );
+  });
+
+  it("throws when indexChunk.maxChunkBytes is invalid (enabled)", () => {
+    assert.throws(
+      () =>
+        validateConfig(
+          {
+            ...defaultConfig,
+            sourcePaths: ["src"],
+            outDir: ".ai-context/out",
+            indexChunk: {
+              ...defaultConfig.indexChunk,
+              enabled: true,
+              maxChunkBytes: 0
+            }
+          },
+          repoRoot
+        ),
+      /indexChunk\.maxChunkBytes must be a positive integer/
+    );
+  });
 });

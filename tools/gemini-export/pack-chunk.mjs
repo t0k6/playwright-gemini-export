@@ -6,6 +6,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { escapePathForChunkBase, inferRole, languageTagFromExt } from "./pack-helpers.mjs";
+import { splitTextByMaxBytes } from "../lib/gemini-export-pure.mjs";
 
 /**
  * describe / test / it のタイトル文字列をざっくり抽出する。
@@ -102,14 +103,16 @@ export function stripYamlFrontmatter(fullText) {
  *   readRootAbs: string,
  *   packRootAbs: string,
  *   packableRelPaths: string[],
- *   packConfig: { chunkMaxLines: number },
+ *   packConfig: { chunkMode?: string, chunkMaxLines: number, maxChunkBytes?: number },
  *   checkOnly: boolean
  * }} opts
  * @returns {Promise<Array<{ originalPath: string, role: string, chunkRelPaths: string[] }>>}
  */
 export async function writePackChunks(opts) {
   const { readRootAbs, packRootAbs, packableRelPaths, packConfig, checkOnly } = opts;
+  const chunkMode = packConfig.chunkMode ?? "line";
   const maxLines = packConfig.chunkMaxLines;
+  const maxChunkBytes = packConfig.maxChunkBytes ?? 48 * 1024;
   const chunksDirAbs = path.join(packRootAbs, "chunks");
   if (!checkOnly) {
     await fs.mkdir(chunksDirAbs, { recursive: true });
@@ -127,7 +130,10 @@ export async function writePackChunks(opts) {
     const lang = languageTagFromExt(ext);
     const symbols = extractSymbols(text);
     const dependsOn = extractRelativeImports(text);
-    const parts = splitTextIntoLineChunks(text, maxLines);
+    const parts =
+      chunkMode === "byte"
+        ? splitTextByMaxBytes(text, { maxChunkBytes }).map((c) => c.text)
+        : splitTextIntoLineChunks(text, maxLines);
     const base = escapePathForChunkBase(normalized);
     const chunkRelPaths = [];
 

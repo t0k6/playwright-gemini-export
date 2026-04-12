@@ -6,6 +6,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { inferRole } from "./pack-helpers.mjs";
+export const PROJECT_INDEX_MAX_ROWS = 120;
 
 /**
  * ファイルパス一覧からツリー文字列を組み立てる。
@@ -42,7 +43,7 @@ export function buildDirectoryTreeLines(filePaths) {
 }
 
 /**
- * @param {{ path: string, role: string, lineCount: number, ext: string, chunkRelPaths?: string[] }[]} rows
+ * @param {{ path: string, role: string, kind: string, lineCount: number, sizeBytes: number, ext: string, chunkRelPaths?: string[], summary?: string }[]} rows
  */
 function buildPathIndexJsonl(rows) {
   return rows.map((r) => JSON.stringify(r)).join("\n") + (rows.length > 0 ? "\n" : "");
@@ -62,26 +63,30 @@ export async function writePackIndex(opts) {
 
   const chunkByPath = new Map(chunkRecords.map((c) => [c.originalPath, c.chunkRelPaths]));
 
-  /** @type {{ path: string, role: string, lineCount: number, ext: string, chunkRelPaths: string[] }[]} */
+  /** @type {{ path: string, role: string, kind: string, lineCount: number, sizeBytes: number, ext: string, chunkRelPaths: string[], summary: string }[]} */
   const rows = [];
   for (const rel of packableRelPaths) {
     const normalized = rel.replace(/\\/g, "/");
     const abs = path.join(readRootAbs, ...normalized.split("/"));
     const text = await fs.readFile(abs, "utf8");
+    const st = await fs.stat(abs);
     const lineCount = text === "" ? 0 : text.split(/\r?\n/).length;
     const ext = path.extname(normalized).toLowerCase();
     const role = inferRole(normalized);
+    const kind = role;
     const chunkRelPaths = chunkByPath.get(normalized) ?? [];
-    rows.push({ path: normalized, role, lineCount, ext, chunkRelPaths });
+    rows.push({ path: normalized, role, kind, lineCount, sizeBytes: st.size, ext, chunkRelPaths, summary: "" });
   }
 
   const tree = buildDirectoryTreeLines(packableRelPaths);
   const directoryTreeMd = `# DIRECTORY_TREE\n\n\`\`\`text\n${tree}\n\`\`\`\n`;
 
-  const tableRows = rows
+  const listedRows = rows.slice(0, PROJECT_INDEX_MAX_ROWS);
+  const omittedRows = Math.max(0, rows.length - listedRows.length);
+  const tableRows = listedRows
     .map((r) => {
       const chunks = r.chunkRelPaths.map((c) => `\`${c}\``).join("<br>");
-      return `| \`${r.path}\` | ${r.role} | ${r.lineCount} | ${r.ext} | ${chunks} |`;
+      return `| \`${r.path}\` | ${r.role} | ${r.lineCount} | ${r.sizeBytes} | ${r.ext} | ${chunks} |`;
     })
     .join("\n");
 
@@ -91,9 +96,11 @@ export async function writePackIndex(opts) {
 
 ## ファイル一覧
 
-| path | role | lines | ext | chunks |
-| --- | --- | ---: | --- | --- |
+| path | role | lines | bytes | ext | chunks |
+| --- | --- | ---: | ---: | --- | --- |
 ${tableRows}
+
+${omittedRows > 0 ? `> 一覧省略: 全${rows.length}件中、先頭${listedRows.length}件を表示。詳細は \`PATH_INDEX.jsonl\` を参照。` : ""}
 
 ## ディレクトリツリー（抜粋）
 
