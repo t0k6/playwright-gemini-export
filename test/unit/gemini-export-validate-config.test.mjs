@@ -71,6 +71,33 @@ describe("gemini-export validateConfig", () => {
     );
   });
 
+  it("throws when pack.chunkMode='byte' and maxChunkBytes is missing/invalid", () => {
+    assert.throws(
+      () =>
+        validatePackConfig(
+          { outSubDir: "_pack", chunkMode: "byte", chunkMaxLines: 300, bundleGroupDepth: 2 },
+          ".ai-context/out",
+          repoRoot
+        ),
+      /maxChunkBytes/
+    );
+    assert.throws(
+      () =>
+        validatePackConfig(
+          {
+            outSubDir: "_pack",
+            chunkMode: "byte",
+            chunkMaxLines: 300,
+            maxChunkBytes: 0,
+            bundleGroupDepth: 2
+          },
+          ".ai-context/out",
+          repoRoot
+        ),
+      /maxChunkBytes/
+    );
+  });
+
   it("throws when indexChunk.chunksDir escapes repo (enabled)", () => {
     assert.throws(
       () =>

@@ -10,7 +10,9 @@
  *   redactedFiles: unknown[],
  *   anonymizedFiles: unknown[],
  *   skippedFiles: string[],
- *   warnings: string[]
+ *   warnings: string[],
+ *   indexFiles?: string[],
+ *   chunkCount?: number
  * }} manifest
  * @param {{ packOutSubDir?: string }} [opts]
  * @returns {string}

@@ -139,12 +139,21 @@ export async function writePackChunks(opts) {
 
     for (let i = 0; i < parts.length; i++) {
       const partLabel = `${i + 1}/${parts.length}`;
-      const suffix = parts.length > 1 ? `__p${i + 1}of${parts.length}` : "";
+      const chunkSeq = String(i + 1).padStart(3, "0");
+      const suffix = parts.length > 1 ? `__${chunkSeq}` : "";
       const chunkName = `${base}${suffix}.md`;
       const chunkId = `${base}__${String(i + 1).padStart(3, "0")}`;
       const chunkRelPosix = `chunks/${chunkName}`;
       const body = parts[i];
-      const fence = "```" + lang + "\n// " + normalized + "\n" + body + "\n```\n";
+      const chunkText = String(body).replace(/\s+$/u, "");
+      const longestTickRun =
+        Math.max(
+          0,
+          ...((chunkText.match(/`{3,}/g) ?? []).map((m) => m.length))
+        );
+      const fenceTicks = "`".repeat(Math.max(3, longestTickRun + 1));
+      const openFence = lang ? `${fenceTicks}${lang}` : fenceTicks;
+      const fence = [openFence, `// ${normalized}`, chunkText, fenceTicks, ""].join("\n");
       const fm = buildYamlFrontmatter({
         original_path: normalized,
         chunk: partLabel,

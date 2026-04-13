@@ -151,6 +151,8 @@ export async function generateIndexAndChunks(manifest, outDirAbs, indexChunkConf
   projectIndexLines.push("");
   projectIndexLines.push("## ファイル一覧（抜粋）");
 
+  await fs.mkdir(path.dirname(projectIndexAbs), { recursive: true });
+  await fs.mkdir(path.dirname(pathIndexAbs), { recursive: true });
   await fs.mkdir(chunksDirAbs, { recursive: true });
 
   let totalChunks = 0;
@@ -223,8 +225,15 @@ export async function generateIndexAndChunks(manifest, outDirAbs, indexChunkConf
         ""
       ].join("\n");
 
-      const fence = lang ? `\`\`\`${lang}` : "```";
-      const body = [header, fence, c.text.replace(/\s+$/u, ""), "```", ""].join("\n");
+      const chunkText = c.text.replace(/\s+$/u, "");
+      const longestTickRun =
+        Math.max(
+          0,
+          ...((chunkText.match(/`{3,}/g) ?? []).map((m) => m.length))
+        );
+      const fenceTicks = "`".repeat(Math.max(3, longestTickRun + 1));
+      const openFence = lang ? `${fenceTicks}${lang}` : fenceTicks;
+      const body = [header, openFence, chunkText, fenceTicks, ""].join("\n");
       await fs.writeFile(chunkAbs, body, "utf8");
       chunkFiles.push(chunkRel);
       totalChunks++;

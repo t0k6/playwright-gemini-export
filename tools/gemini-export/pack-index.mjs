@@ -78,7 +78,8 @@ export async function writePackIndex(opts) {
     rows.push({ path: normalized, role, kind, lineCount, sizeBytes: st.size, ext, chunkRelPaths, summary: "" });
   }
 
-  const tree = buildDirectoryTreeLines(packableRelPaths);
+  const treePathsPosix = packableRelPaths.map((p) => p.replace(/\\/g, "/"));
+  const tree = buildDirectoryTreeLines(treePathsPosix);
   const directoryTreeMd = `# DIRECTORY_TREE\n\n\`\`\`text\n${tree}\n\`\`\`\n`;
 
   const listedRows = rows.slice(0, PROJECT_INDEX_MAX_ROWS);

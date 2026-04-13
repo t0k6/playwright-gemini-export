@@ -74,7 +74,11 @@ export function validateConfig(config, repoRoot) {
     }
   }
 
-  if (config.pack && typeof config.pack === "object") {
+  if (typeof config.pack !== "undefined") {
+    if (typeof config.pack !== "object" || config.pack === null) {
+      const t = config.pack === null ? "null" : typeof config.pack;
+      throw new TypeError(`pack must be a non-null object, got: ${t}`);
+    }
     validatePackConfig(config.pack, config.outDir, repoRoot);
   }
 

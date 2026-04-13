@@ -23,7 +23,7 @@ assignees: []
 
 - `main...REPLACE_BRANCH_A`
 - `main...REPLACE_BRANCH_B`
-- `REPLACE_BRANCH_A...REPLACE_BRANCH_B`（互いの差分。読み方は[docs/github-comparative-review.md](https://github.com/t0k6/playwright-gemini-export/blob/main/docs/github-comparative-review.md)を参照）
+- `REPLACE_BRANCH_A...REPLACE_BRANCH_B`（互いの差分。読み方は[docs/github-comparative-review.md](../docs/github-comparative-review.md)を参照）
 
 ## 共通チェックリスト（PRのDescriptionにも同文を貼る）
 
@@ -35,7 +35,7 @@ assignees: []
 
 ## クロスレビュー依頼
 
-[docs/github-comparative-review.md](https://github.com/t0k6/playwright-gemini-export/blob/main/docs/github-comparative-review.md)の「クロスレビュー依頼文」を各PRにコピーし、レビュアーをアサインする。
+[docs/github-comparative-review.md](../docs/github-comparative-review.md)の「クロスレビュー依頼文」を各PRにコピーし、レビュアーをアサインする。
 
 ## 統合・改善計画（統合責任者が記入）
 

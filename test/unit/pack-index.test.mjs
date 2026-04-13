@@ -8,9 +8,10 @@ import { buildDirectoryTreeLines, writePackIndex } from "../../tools/gemini-expo
 describe("pack-index", () => {
   it("buildDirectoryTreeLines renders nested paths", () => {
     const tree = buildDirectoryTreeLines(["src/a.ts", "src/b/c.ts"]);
-    assert.match(tree, /src/);
-    assert.match(tree, /a\.ts/);
-    assert.match(tree, /b/);
+    assert.strictEqual(
+      tree,
+      ["src", "  a.ts", "  b", "    c.ts"].join("\n")
+    );
   });
 
   it("writePackIndex lineCount ignores trailing newline synthetic empty line", async () => {

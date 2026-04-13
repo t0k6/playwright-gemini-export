@@ -20,6 +20,8 @@ export async function writePackBundles(opts) {
   const { packRootAbs, chunkRecords, packConfig, checkOnly } = opts;
   const depth = packConfig.bundleGroupDepth;
 
+  if (checkOnly) return;
+
   /** @type {Map<string, Array<{ originalPath: string, role: string, chunkRelPaths: string[] }>>} */
   const groups = new Map();
 
@@ -31,9 +33,7 @@ export async function writePackBundles(opts) {
   }
 
   const bundlesDirAbs = path.join(packRootAbs, "bundles");
-  if (!checkOnly) {
-    await fs.mkdir(bundlesDirAbs, { recursive: true });
-  }
+  await fs.mkdir(bundlesDirAbs, { recursive: true });
 
   const keysSorted = [...groups.keys()].sort();
   for (const key of keysSorted) {
@@ -50,17 +50,12 @@ export async function writePackBundles(opts) {
       body += `## \`${rec.originalPath}\`\n\n`;
       for (const chunkRel of rec.chunkRelPaths) {
         const chunkAbs = path.join(packRootAbs, ...chunkRel.split("/"));
-        let chunkText = "";
-        if (!checkOnly) {
-          chunkText = await fs.readFile(chunkAbs, "utf8");
-        }
+        const chunkText = await fs.readFile(chunkAbs, "utf8");
         const stripped = stripYamlFrontmatter(chunkText);
         body += stripped.trimEnd() + "\n\n";
       }
     }
 
-    if (!checkOnly) {
-      await fs.writeFile(path.join(bundlesDirAbs, name), body, "utf8");
-    }
+    await fs.writeFile(path.join(bundlesDirAbs, name), body, "utf8");
   }
 }

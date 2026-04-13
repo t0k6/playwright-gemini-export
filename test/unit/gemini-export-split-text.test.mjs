@@ -14,7 +14,8 @@ describe("splitTextByMaxBytes", () => {
     const chunks = splitTextByMaxBytes(text, { maxChunkBytes: 50 });
     assert.ok(chunks.length >= 2);
     for (const c of chunks) {
-      assert.ok(Buffer.byteLength(c.text, "utf8") <= 50 || c.text.length > 0);
+      assert.ok(c.text.length > 0, "chunk must be non-empty");
+      assert.ok(Buffer.byteLength(c.text, "utf8") <= 50, "chunk must not exceed byte cap");
     }
   });
 

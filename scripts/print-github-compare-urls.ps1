@@ -21,14 +21,14 @@ param(
     [Parameter(Mandatory = $true)][string] $BranchB
 )
 
-function Encode-BranchSegment([string] $s) {
-    [uri]::EscapeDataString($s) -replace '\+', '%20'
+function ConvertTo-EncodedBranchSegment([string] $s) {
+    [uri]::EscapeDataString($s)
 }
 
 $root = "https://github.com/$OwnerRepo/compare"
-$bA = Encode-BranchSegment $BranchA
-$bB = Encode-BranchSegment $BranchB
-$bBase = Encode-BranchSegment $Base
+$bA = ConvertTo-EncodedBranchSegment $BranchA
+$bB = ConvertTo-EncodedBranchSegment $BranchB
+$bBase = ConvertTo-EncodedBranchSegment $Base
 
 Write-Host "BASE...A : $root/$bBase...$bA"
 Write-Host "BASE...B : $root/$bBase...$bB"

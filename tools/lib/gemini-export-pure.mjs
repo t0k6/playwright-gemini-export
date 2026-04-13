@@ -149,6 +149,38 @@ export function splitTextByMaxBytes(text, { maxChunkBytes }) {
   let bufBytes = 0;
   let idx = 1;
 
+  /**
+   * `s` の先頭から `maxChunkBytes` 以下になる最大 prefix を返す（空は返さない）。
+   * @param {string} s
+   * @returns {string}
+   */
+  const takePrefixWithinBytes = (s) => {
+    if (s.length === 0) return "";
+    // Quick path: whole string fits.
+    if (Buffer.byteLength(s, "utf8") <= maxChunkBytes) return s;
+
+    let lo = 1;
+    let hi = s.length;
+    let best = 1;
+    while (lo <= hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      const prefix = s.slice(0, mid);
+      const bytes = Buffer.byteLength(prefix, "utf8");
+      if (bytes <= maxChunkBytes) {
+        best = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+
+    // Safety shrink in case of surrogate edge weirdness.
+    while (best > 1 && Buffer.byteLength(s.slice(0, best), "utf8") > maxChunkBytes) {
+      best--;
+    }
+    return s.slice(0, Math.max(1, best));
+  };
+
   const pushChunk = () => {
     const out = buf.replace(/\s+$/u, "");
     if (out.length === 0) return;
@@ -170,8 +202,7 @@ export function splitTextByMaxBytes(text, { maxChunkBytes }) {
       // Fall back to a hard split within a long line.
       let rest = lineWithNl;
       while (Buffer.byteLength(rest, "utf8") > maxChunkBytes) {
-        // Rough split by code units; keep it simple for MVP.
-        const slice = rest.slice(0, Math.max(1, Math.floor(rest.length / 2)));
+        const slice = takePrefixWithinBytes(rest);
         chunks.push({ index: idx++, text: slice });
         rest = rest.slice(slice.length);
       }
