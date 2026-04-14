@@ -139,7 +139,22 @@ describe("gemini-export validateConfig", () => {
           ".ai-context/out",
           repoRoot
         ),
-      /maxChunkBytes/
+      /pack\.maxChunkBytes must be an integer >= 4/
+    );
+    assert.throws(
+      () =>
+        validatePackConfig(
+          {
+            outSubDir: "_pack",
+            chunkMode: "byte",
+            chunkMaxLines: 300,
+            maxChunkBytes: 3,
+            bundleGroupDepth: 2
+          },
+          ".ai-context/out",
+          repoRoot
+        ),
+      /pack\.maxChunkBytes must be an integer >= 4/
     );
   });
 
@@ -179,7 +194,27 @@ describe("gemini-export validateConfig", () => {
           },
           repoRoot
         ),
-      /indexChunk\.maxChunkBytes must be a positive integer/
+      /indexChunk\.maxChunkBytes must be an integer >= 4/
+    );
+  });
+
+  it("throws when indexChunk.maxChunkBytes is 1..3 (enabled)", () => {
+    assert.throws(
+      () =>
+        validateConfig(
+          {
+            ...defaultConfig,
+            sourcePaths: ["src"],
+            outDir: ".ai-context/out",
+            indexChunk: {
+              ...defaultConfig.indexChunk,
+              enabled: true,
+              maxChunkBytes: 3
+            }
+          },
+          repoRoot
+        ),
+      /indexChunk\.maxChunkBytes must be an integer >= 4/
     );
   });
 

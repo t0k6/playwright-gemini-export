@@ -15,6 +15,8 @@
     ブランチ B
 #>
 param(
+    [Parameter()]
+    [ValidateNotNullOrEmpty()]
     [string] $OwnerRepo = "t0k6/playwright-gemini-export",
     [Parameter(Mandatory = $true)]
     [ValidateNotNullOrEmpty()]

@@ -25,20 +25,17 @@ describe("splitTextByMaxBytes", () => {
     assert.ok(chunks.length >= 2);
   });
 
-  it("splits ASCII under maxChunkBytes=1", () => {
-    const chunks = splitTextByMaxBytes("abcd\n", { maxChunkBytes: 1 });
-    assert.ok(chunks.length >= 1);
-    for (const c of chunks) {
-      assert.ok(Buffer.byteLength(c.text, "utf8") <= 1, `chunk too large: ${JSON.stringify(c.text)}`);
-    }
+  it("rejects maxChunkBytes below 4", () => {
+    assert.throws(() => splitTextByMaxBytes("abcd\n", { maxChunkBytes: 1 }), /maxChunkBytes must be a finite number >= 4/);
+    assert.throws(() => splitTextByMaxBytes("abcd\n", { maxChunkBytes: 3 }), /maxChunkBytes must be a finite number >= 4/);
   });
 
   it("splits long single multibyte line under UTF-8 byte cap", () => {
     const long = "あ".repeat(10);
-    const chunks = splitTextByMaxBytes(`${long}\n`, { maxChunkBytes: 3 });
-    assert.ok(chunks.length >= 10);
+    const chunks = splitTextByMaxBytes(`${long}\n`, { maxChunkBytes: 4 });
+    assert.ok(chunks.length >= 8);
     for (const c of chunks) {
-      assert.ok(Buffer.byteLength(c.text, "utf8") <= 3, `chunk too large: ${JSON.stringify(c.text)}`);
+      assert.ok(Buffer.byteLength(c.text, "utf8") <= 4, `chunk too large: ${JSON.stringify(c.text)}`);
     }
   });
 });

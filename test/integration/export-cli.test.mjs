@@ -102,6 +102,22 @@ describe("export-gemini-playwright-context CLI", () => {
     }
   });
 
+  it("exits non-zero when indexChunk is an array (CLI guard before merge)", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
+    try {
+      await copyFixture(tmp);
+      const cfgPath = path.join(tmp, ".gemini-export.json");
+      const cfg = JSON.parse(await fs.readFile(cfgPath, "utf8"));
+      cfg.indexChunk = [];
+      await fs.writeFile(cfgPath, JSON.stringify(cfg), "utf8");
+      const { code, stderr } = await runExport(tmp);
+      assert.notEqual(code, 0, stderr);
+      assert.match(stderr + "", /indexChunk must be a non-null object/);
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
   it("manifest.json and README_FOR_AI reflect indexChunk; PATH_INDEX and chunks have required metadata", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
     try {

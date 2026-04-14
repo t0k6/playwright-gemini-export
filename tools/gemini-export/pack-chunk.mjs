@@ -145,63 +145,66 @@ export async function writePackChunks(opts) {
   for (const relPath of packableRelPaths) {
     const normalized = relPath.replace(/\\/g, "/");
     const srcAbs = path.join(readRootAbs, ...normalized.split("/"));
+    let text;
     try {
-      const text = await fs.readFile(srcAbs, "utf8");
-      const role = inferRole(normalized);
-      const ext = path.extname(normalized);
-      const lang = languageTagFromExt(ext);
-      const symbols = extractSymbols(text);
-      const dependsOn = extractRelativeImports(text);
-      const parts =
-        chunkMode === "byte"
-          ? splitTextByMaxBytes(text, { maxChunkBytes }).map((c) => c.text)
-          : splitTextIntoLineChunks(text, maxLines);
-      const base = escapePathForChunkBase(normalized);
-      const chunkRelPaths = [];
-
-      for (let i = 0; i < parts.length; i++) {
-        const partLabel = `${i + 1}/${parts.length}`;
-        const chunkSeq = String(i + 1).padStart(3, "0");
-        const suffix = parts.length > 1 ? `__${chunkSeq}` : "";
-        const chunkName = `${base}${suffix}.md`;
-        const chunkId = `${base}__${String(i + 1).padStart(3, "0")}`;
-        const chunkRelPosix = `chunks/${chunkName}`;
-        const body = parts[i];
-        const chunkText = String(body).replace(/\s+$/u, "");
-        const longestTickRun =
-          Math.max(
-            0,
-            ...((chunkText.match(/`{3,}/g) ?? []).map((m) => m.length))
-          );
-        const fenceTicks = "`".repeat(Math.max(3, longestTickRun + 1));
-        const openFence = lang ? `${fenceTicks}${lang}` : fenceTicks;
-        const fence = [openFence, `// ${normalized}`, chunkText, fenceTicks, ""].join("\n");
-        const fm = buildYamlFrontmatter({
-          original_path: normalized,
-          chunk: partLabel,
-          chunk_id: chunkId,
-          role,
-          symbols,
-          depends_on: dependsOn
-        });
-        const md = `${fm}\n\n${fence}\n`;
-        if (!checkOnly) {
-          const dest = path.join(chunksDirAbs, chunkName);
-          await fs.mkdir(path.dirname(dest), { recursive: true });
-          await fs.writeFile(dest, md, "utf8");
-        }
-        chunkRelPaths.push(chunkRelPosix);
-      }
-
-      records.push({
-        originalPath: normalized,
-        role,
-        chunkRelPaths
-      });
+      text = await fs.readFile(srcAbs, "utf8");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.warn(`[pack-chunk] skip file: ${normalized} (${srcAbs}): ${msg}`);
+      continue;
     }
+
+    const role = inferRole(normalized);
+    const ext = path.extname(normalized);
+    const lang = languageTagFromExt(ext);
+    const symbols = extractSymbols(text);
+    const dependsOn = extractRelativeImports(text);
+    const parts =
+      chunkMode === "byte"
+        ? splitTextByMaxBytes(text, { maxChunkBytes }).map((c) => c.text)
+        : splitTextIntoLineChunks(text, maxLines);
+    const base = escapePathForChunkBase(normalized);
+    const chunkRelPaths = [];
+
+    for (let i = 0; i < parts.length; i++) {
+      const partLabel = `${i + 1}/${parts.length}`;
+      const chunkSeq = String(i + 1).padStart(3, "0");
+      const suffix = parts.length > 1 ? `__${chunkSeq}` : "";
+      const chunkName = `${base}${suffix}.md`;
+      const chunkId = `${base}__${String(i + 1).padStart(3, "0")}`;
+      const chunkRelPosix = `chunks/${chunkName}`;
+      const body = parts[i];
+      const chunkText = String(body).replace(/\n+$/u, "");
+      const longestTickRun =
+        Math.max(
+          0,
+          ...((chunkText.match(/`{3,}/g) ?? []).map((m) => m.length))
+        );
+      const fenceTicks = "`".repeat(Math.max(3, longestTickRun + 1));
+      const openFence = lang ? `${fenceTicks}${lang}` : fenceTicks;
+      const fence = [openFence, `// ${normalized}`, chunkText, fenceTicks, ""].join("\n");
+      const fm = buildYamlFrontmatter({
+        original_path: normalized,
+        chunk: partLabel,
+        chunk_id: chunkId,
+        role,
+        symbols,
+        depends_on: dependsOn
+      });
+      const md = `${fm}\n\n${fence}\n`;
+      if (!checkOnly) {
+        const dest = path.join(chunksDirAbs, chunkName);
+        await fs.mkdir(path.dirname(dest), { recursive: true });
+        await fs.writeFile(dest, md, "utf8");
+      }
+      chunkRelPaths.push(chunkRelPosix);
+    }
+
+    records.push({
+      originalPath: normalized,
+      role,
+      chunkRelPaths
+    });
   }
 
   return records;

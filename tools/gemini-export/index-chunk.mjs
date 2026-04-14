@@ -6,6 +6,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { isWithinBaseDir, normalizeExt, normalizeRelPath } from "./paths.mjs";
+import { buildYamlFrontmatter } from "./pack-chunk.mjs";
 import { chunkIdBaseFromRelPath, guessFileKind, splitTextByMaxBytes } from "../lib/gemini-export-pure.mjs";
 
 /** `PROJECT_INDEX.md` 内の行数上限（ヘッダー＋ファイル行の合計がこの未満ならファイル行を追加）。 */
@@ -230,16 +231,13 @@ export async function generateIndexAndChunks(manifest, outDirAbs, indexChunkConf
         continue;
       }
 
-      const header = [
-        "---",
-        `original_path: ${relNorm}`,
-        `chunk_id: ${chunkId}`,
-        `kind: ${kind}`,
-        "---",
-        ""
-      ].join("\n");
+      const header = `${buildYamlFrontmatter({
+        original_path: relNorm,
+        chunk_id: chunkId,
+        kind
+      })}\n`;
 
-      const chunkText = c.text.replace(/\s+$/u, "");
+      const chunkText = c.text.replace(/\n+$/u, "");
       const longestTickRun =
         Math.max(
           0,

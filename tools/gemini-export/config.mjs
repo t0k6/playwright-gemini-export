@@ -98,8 +98,8 @@ export function validateConfig(config, repoRoot) {
         }
         assertSafeRelPath(ic[key], repoRoot);
       }
-      if (!Number.isFinite(ic.maxChunkBytes) || !Number.isInteger(ic.maxChunkBytes) || ic.maxChunkBytes <= 0) {
-        throw new Error("indexChunk.maxChunkBytes must be a positive integer.");
+      if (!Number.isFinite(ic.maxChunkBytes) || !Number.isInteger(ic.maxChunkBytes) || ic.maxChunkBytes < 4) {
+        throw new Error("indexChunk.maxChunkBytes must be an integer >= 4 (UTF-8 safe chunking).");
       }
       if (typeof ic.chunkExtensions !== "undefined") {
         if (!Array.isArray(ic.chunkExtensions)) {
@@ -153,9 +153,9 @@ export function validatePackConfig(pack, outDir, repoRoot) {
       typeof maxBytes !== "number" ||
       !Number.isFinite(maxBytes) ||
       !Number.isInteger(maxBytes) ||
-      maxBytes <= 0
+      maxBytes < 4
     ) {
-      throw new Error("pack.maxChunkBytes must be a positive integer when pack.chunkMode='byte'.");
+      throw new Error("pack.maxChunkBytes must be an integer >= 4 when pack.chunkMode='byte'.");
     }
   }
   const depth = pack.bundleGroupDepth;

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import path from "node:path";
 
 export function assertWithinRepoRoot(
@@ -126,12 +127,15 @@ export function applyRedactions(text, redactRules) {
 }
 
 /**
- * Convert a repo-relative path to a stable chunk id base.
- * @param {string} relPath
+ * index-chunk 用の chunk_id ベース（ファイル名安全）。スラッシュを `__` にしたあと、正規化パス（`\\`→`/`）の SHA-256 先頭8hex を `__h` で付与し、`src/a/b.ts` と `src/a__b.ts` の衝突を避ける。
+ * @param {string} relPath リポジトリ相対パス
  * @returns {string}
  */
 export function chunkIdBaseFromRelPath(relPath) {
-  return String(relPath).replace(/[\\/]/g, "__");
+  const n = String(relPath).replace(/\\/g, "/");
+  const flat = n.replace(/[\\/]/g, "__");
+  const h = createHash("sha256").update(n, "utf8").digest("hex").slice(0, 8);
+  return `${flat}__h${h}`;
 }
 
 /**
@@ -142,6 +146,9 @@ export function chunkIdBaseFromRelPath(relPath) {
  * @returns {{ index: number, text: string }[]}
  */
 export function splitTextByMaxBytes(text, { maxChunkBytes }) {
+  if (typeof maxChunkBytes !== "number" || !Number.isFinite(maxChunkBytes) || maxChunkBytes < 4) {
+    throw new Error("splitTextByMaxBytes: maxChunkBytes must be a finite number >= 4");
+  }
   const lines = String(text).split(/\r?\n/);
   const chunks = [];
 
@@ -180,7 +187,7 @@ export function splitTextByMaxBytes(text, { maxChunkBytes }) {
   };
 
   const pushChunk = () => {
-    const out = buf.replace(/\s+$/u, "");
+    const out = buf.replace(/\n+$/u, "");
     if (out.length === 0) return;
     chunks.push({ index: idx++, text: out + "\n" });
     buf = "";

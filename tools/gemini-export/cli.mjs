@@ -91,9 +91,20 @@ export async function runCli() {
   }
 
   const { config, warnings: configWarnings } = await loadConfig(repoRoot);
+  if (typeof config.indexChunk !== "undefined") {
+    if (
+      config.indexChunk === null ||
+      typeof config.indexChunk !== "object" ||
+      Array.isArray(config.indexChunk)
+    ) {
+      throw new Error("indexChunk must be a non-null object (not an array).");
+    }
+  }
   const indexChunkMerged = {
     ...defaultConfig.indexChunk,
-    ...(config.indexChunk && typeof config.indexChunk === "object" ? config.indexChunk : {}),
+    ...(config.indexChunk && typeof config.indexChunk === "object" && !Array.isArray(config.indexChunk)
+      ? config.indexChunk
+      : {}),
     ...(forceIndexChunk ? { enabled: true } : {})
   };
   const configForRun = { ...config, indexChunk: indexChunkMerged };

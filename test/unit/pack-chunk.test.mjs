@@ -64,6 +64,17 @@ describe("pack-chunk", () => {
     assert.ok(y.includes('"x: y"'));
   });
 
+  it("buildYamlFrontmatter quotes original_path with hash, colon, and spaces", () => {
+    const y = buildYamlFrontmatter({
+      original_path: "foo#bar/baz: qux.md",
+      chunk_id: "id__001",
+      kind: "spec"
+    });
+    assert.match(y, /^original_path: "/m);
+    assert.ok(y.includes("foo#bar"));
+    assert.ok(y.includes("baz: qux"));
+  });
+
   it("stripYamlFrontmatter removes first frontmatter", () => {
     const md = "---\nrole: spec\n---\n\nbody\n";
     assert.equal(stripYamlFrontmatter(md), "body\n");
@@ -82,6 +93,6 @@ describe("pack-chunk", () => {
       symbols: ["a\tb\rc"]
     });
     // 配列要素1行: 先頭2スペース + "- " + 二重引用符で囲んだエスケープ済みスカラー（\t \r は YAML 上の二文字）
-    assert.match(y, /^  - "a\\tb\\rc"$/m, y);
+    assert.match(y, /^ {2}- "a\\tb\\rc"$/m, y);
   });
 });

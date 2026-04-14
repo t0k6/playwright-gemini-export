@@ -208,11 +208,21 @@ describe("gemini-export (paths + config re-exports, pure redact)", () => {
   });
 
   describe("chunking helpers", () => {
-    it("builds stable chunk id base from path", () => {
+    it("builds stable chunk id base from path (flat + hash suffix)", () => {
       assert.equal(
         chunkIdBaseFromRelPath("playwright/tests/auth/login.spec.ts"),
-        "playwright__tests__auth__login.spec.ts"
+        "playwright__tests__auth__login.spec.ts__h1c67dbf4"
       );
+    });
+
+    it("chunkIdBaseFromRelPath distinguishes paths that flatten to the same string", () => {
+      const a = chunkIdBaseFromRelPath("src/a/b.ts");
+      const b = chunkIdBaseFromRelPath("src/a__b.ts");
+      assert.notEqual(a, b);
+      assert.match(a, /^src__a__b\.ts__h[0-9a-f]{8}$/);
+      assert.match(b, /^src__a__b\.ts__h[0-9a-f]{8}$/);
+      assert.equal(a, "src__a__b.ts__heb704146");
+      assert.equal(b, "src__a__b.ts__hba8f07e2");
     });
 
     it("splits text by maxChunkBytes (line-based)", () => {
