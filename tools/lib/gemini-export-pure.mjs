@@ -133,7 +133,7 @@ export function applyRedactions(text, redactRules) {
  */
 export function chunkIdBaseFromRelPath(relPath) {
   const n = String(relPath).replace(/\\/g, "/");
-  const flat = n.replace(/[\\/]/g, "__");
+  const flat = n.replace(/\//g, "__");
   const h = createHash("sha256").update(n, "utf8").digest("hex").slice(0, 8);
   return `${flat}__h${h}`;
 }
