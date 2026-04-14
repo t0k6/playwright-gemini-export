@@ -220,7 +220,7 @@ export async function generateIndexAndChunks(manifest, outDirAbs, indexChunkConf
     const idBase = chunkIdBaseFromRelPath(relNorm);
     const lang = languageFromExt(ext);
     const maxDigits =
-      chunks.length <= 0 ? 1 : Math.max(1, String(chunks.length - 1).length);
+      chunks.length <= 0 ? 1 : Math.max(1, String(chunks.length).length);
 
     for (const c of chunks) {
       const chunkId = `${idBase}__${String(c.index).padStart(maxDigits, "0")}`;

@@ -9,6 +9,7 @@ import {
   PROJECT_INDEX_HEADER_LINE_COUNT,
   PROJECT_INDEX_MAX_LINES
 } from "../../tools/gemini-export/index-chunk.mjs";
+import { escapePathForChunkBase } from "../../tools/gemini-export/pack-helpers.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..", "..");
@@ -315,7 +316,8 @@ describe("export-gemini-playwright-context CLI", () => {
       await fs.access(path.join(packRoot, "PROJECT_INDEX.md"));
       await fs.access(path.join(packRoot, "DIRECTORY_TREE.md"));
       await fs.access(path.join(packRoot, "PATH_INDEX.jsonl"));
-      await fs.access(path.join(packRoot, "chunks", "src__sample.ts.md"));
+      const expectedChunkName = `${escapePathForChunkBase("src/sample.ts")}.md`;
+      await fs.access(path.join(packRoot, "chunks", expectedChunkName));
       const bundles = await fs.readdir(path.join(packRoot, "bundles"));
       assert.ok(bundles.some((n) => n.startsWith("bundle-src-other")), bundles.join(","));
     } finally {
@@ -400,25 +402,32 @@ describe("export-gemini-playwright-context CLI", () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-many-"));
     try {
       await copyFixture(tmp);
+      const cfgPath = path.join(tmp, ".gemini-export.json");
+      const cfg = JSON.parse(await fs.readFile(cfgPath, "utf8"));
+      cfg.indexChunk = { enabled: true, maxChunkBytes: 2048 };
+      await fs.writeFile(cfgPath, JSON.stringify(cfg), "utf8");
+
+      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      const { code: code0, stderr: stderr0 } = await runExport(tmp);
+      assert.equal(code0, 0, stderr0);
+      const jsonl0 = await fs.readFile(path.join(outRoot, "PATH_INDEX.jsonl"), "utf8");
+      const baselineIndexedFiles = jsonl0
+        .trim()
+        .split("\n")
+        .filter((line) => line.length > 0).length;
+      await fs.rm(outRoot, { recursive: true, force: true });
+
       const srcDir = path.join(tmp, "src");
       await fs.mkdir(srcDir, { recursive: true });
-      /** minimal-repo で PATH に載る想定の非 bulk 件数（sample.ts + fixtures/sandbox/user.json） */
-      const baselineIndexedFiles = 2;
       const maxListedFiles = PROJECT_INDEX_MAX_LINES - PROJECT_INDEX_HEADER_LINE_COUNT;
       const filesToCreate = Math.max(1, maxListedFiles - baselineIndexedFiles + 1);
       for (let i = 0; i < filesToCreate; i++) {
         await fs.writeFile(path.join(srcDir, `bulk-${i}.ts`), `export const v${i} = ${i};\n`, "utf8");
       }
 
-      const cfgPath = path.join(tmp, ".gemini-export.json");
-      const cfg = JSON.parse(await fs.readFile(cfgPath, "utf8"));
-      cfg.indexChunk = { enabled: true, maxChunkBytes: 2048 };
-      await fs.writeFile(cfgPath, JSON.stringify(cfg), "utf8");
-
       const { code, stderr } = await runExport(tmp);
       assert.equal(code, 0, stderr);
 
-      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
       const projectIndex = await fs.readFile(path.join(outRoot, "PROJECT_INDEX.md"), "utf8");
       assert.match(projectIndex, /一覧省略/);
     } finally {

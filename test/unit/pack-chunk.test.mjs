@@ -39,6 +39,18 @@ describe("pack-chunk", () => {
     assert.ok(im.includes("../up"));
   });
 
+  it("buildYamlFrontmatter renders empty arrays as explicit []", () => {
+    const y = buildYamlFrontmatter({
+      original_path: "src/a.ts",
+      chunk: "1/1",
+      role: "other",
+      symbols: [],
+      depends_on: []
+    });
+    assert.match(y, /^symbols: \[\]$/m, y);
+    assert.match(y, /^depends_on: \[\]$/m, y);
+  });
+
   it("buildYamlFrontmatter produces valid block", () => {
     const y = buildYamlFrontmatter({
       original_path: "src/a.ts",

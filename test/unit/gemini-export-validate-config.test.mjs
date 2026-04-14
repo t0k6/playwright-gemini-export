@@ -59,6 +59,18 @@ describe("gemini-export validateConfig", () => {
     );
   });
 
+  it("throws when pack.outSubDir is '.'", () => {
+    assert.throws(
+      () =>
+        validatePackConfig(
+          { outSubDir: ".", chunkMaxLines: 300, bundleGroupDepth: 2 },
+          ".ai-context/out",
+          repoRoot
+        ),
+      /must not be '\.' \(would write pack output/
+    );
+  });
+
   it("throws when pack.chunkMaxLines is out of range", () => {
     assert.throws(
       () =>

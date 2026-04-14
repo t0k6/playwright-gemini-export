@@ -74,9 +74,13 @@ export function buildYamlFrontmatter(fields) {
   for (const [k, v] of Object.entries(fields)) {
     if (v === undefined || v === null) continue;
     if (Array.isArray(v)) {
-      lines.push(`${k}:`);
-      for (const item of v) {
-        lines.push(`  - ${yamlScalar(item)}`);
+      if (v.length === 0) {
+        lines.push(`${k}: []`);
+      } else {
+        lines.push(`${k}:`);
+        for (const item of v) {
+          lines.push(`  - ${yamlScalar(item)}`);
+        }
       }
       continue;
     }

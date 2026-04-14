@@ -126,6 +126,9 @@ export function validatePackConfig(pack, outDir, repoRoot) {
   if (typeof sub !== "string" || sub.length === 0) {
     throw new Error("pack.outSubDir must be a non-empty string.");
   }
+  if (sub === ".") {
+    throw new Error("pack.outSubDir must not be '.' (would write pack output into outDir root).");
+  }
   if (sub.includes("..") || sub.includes("/") || sub.includes("\\")) {
     throw new Error(`pack.outSubDir must be a single path segment (no .. or slashes): ${sub}`);
   }
