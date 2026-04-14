@@ -44,52 +44,57 @@ describe("pack-chunk", () => {
   });
 
   it("writePackChunks uses dynamic code fence when content contains backticks", async () => {
-    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "pack-chunk-fence-"));
-    const readRootAbs = path.join(tmp, "in");
-    const packRootAbs = path.join(tmp, "out");
-    await fs.mkdir(path.join(readRootAbs, "src"), { recursive: true });
+    let tmp;
+    try {
+      tmp = await fs.mkdtemp(path.join(os.tmpdir(), "pack-chunk-fence-"));
+      const readRootAbs = path.join(tmp, "in");
+      const packRootAbs = path.join(tmp, "out");
+      await fs.mkdir(path.join(readRootAbs, "src"), { recursive: true });
 
-    const rel = "src/with-fence.ts";
-    const srcAbs = path.join(readRootAbs, "src", "with-fence.ts");
-    const content = [
-      "export const x = 1;",
-      "",
-      "```",
-      "inside triple backticks",
-      "```",
-      "",
-      "````",
-      "inside quadruple backticks",
-      "````",
-      ""
-    ].join("\n");
-    await fs.writeFile(srcAbs, content, "utf8");
+      const rel = "src/with-fence.ts";
+      const srcAbs = path.join(readRootAbs, "src", "with-fence.ts");
+      const content = [
+        "export const x = 1;",
+        "",
+        "```",
+        "inside triple backticks",
+        "```",
+        "",
+        "````",
+        "inside quadruple backticks",
+        "````",
+        ""
+      ].join("\n");
+      await fs.writeFile(srcAbs, content, "utf8");
 
-    const records = await writePackChunks({
-      readRootAbs,
-      packRootAbs,
-      packableRelPaths: [rel],
-      packConfig: { chunkMaxLines: 300 },
-      checkOnly: false
-    });
-    assert.equal(records.length, 1);
-    assert.equal(records[0].chunkRelPaths.length, 1);
+      const records = await writePackChunks({
+        readRootAbs,
+        packRootAbs,
+        packableRelPaths: [rel],
+        packConfig: { chunkMaxLines: 300 },
+        checkOnly: false
+      });
+      assert.equal(records.length, 1);
+      assert.equal(records[0].chunkRelPaths.length, 1);
 
-    const outAbs = path.join(packRootAbs, ...records[0].chunkRelPaths[0].split("/"));
-    const md = await fs.readFile(outAbs, "utf8");
+      const outAbs = path.join(packRootAbs, ...records[0].chunkRelPaths[0].split("/"));
+      const md = await fs.readFile(outAbs, "utf8");
 
-    const longestTickRun = Math.max(0, ...((content.match(/`{3,}/g) ?? []).map((m) => m.length)));
-    assert.ok(longestTickRun >= 4);
+      const longestTickRun = Math.max(0, ...((content.match(/`{3,}/g) ?? []).map((m) => m.length)));
+      assert.ok(longestTickRun >= 4);
 
-    const openFence = md.split("\n").find((line) => /^`{3,}/.test(line));
-    assert.ok(openFence, md);
-    const fenceLen = (openFence.match(/^`+/) ?? [""])[0].length;
-    assert.ok(fenceLen > longestTickRun, `expected fenceLen>${longestTickRun}, got ${fenceLen}`);
+      const openFence = md.split("\n").find((line) => /^`{3,}/.test(line));
+      assert.ok(openFence, md);
+      const fenceLen = (openFence.match(/^`+/) ?? [""])[0].length;
+      assert.ok(fenceLen > longestTickRun, `expected fenceLen>${longestTickRun}, got ${fenceLen}`);
 
-    assert.ok(md.includes("```"), "expected triple backticks preserved");
-    assert.ok(md.includes("````"), "expected quadruple backticks preserved");
-
-    await fs.rm(tmp, { recursive: true, force: true });
+      assert.ok(md.includes("```"), "expected triple backticks preserved");
+      assert.ok(md.includes("````"), "expected quadruple backticks preserved");
+    } finally {
+      if (tmp) {
+        await fs.rm(tmp, { recursive: true, force: true });
+      }
+    }
   });
 
   it("buildYamlFrontmatter renders empty arrays as explicit []", () => {
