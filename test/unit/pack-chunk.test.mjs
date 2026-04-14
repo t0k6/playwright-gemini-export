@@ -81,7 +81,7 @@ describe("pack-chunk", () => {
       role: "other",
       symbols: ["a\tb\rc"]
     });
-    assert.ok(y.includes("\\t"), y);
-    assert.ok(y.includes("\\r"), y);
+    // 配列要素1行: 先頭2スペース + "- " + 二重引用符で囲んだエスケープ済みスカラー（\t \r は YAML 上の二文字）
+    assert.match(y, /^  - "a\\tb\\rc"$/m, y);
   });
 });
