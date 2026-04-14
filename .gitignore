@@ -7,8 +7,8 @@ node_modules/
 # Cursor internal
 .cursor/
 
-# Git linked worktrees (local comparative review)
-.worktrees/
-
 # Local user config (commit only the example)
 .gemini-export.json
+
+# playwright project
+playwright/

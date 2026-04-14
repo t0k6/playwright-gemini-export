@@ -7,8 +7,6 @@
   "ignores": [
     "node_modules/**",
     ".ai-context/**",
-    ".cursor/**",
-    "**/*.plan.md",
-    "docs/review-from-opus.md"
+    ".cursor/**"
   ]
 }
