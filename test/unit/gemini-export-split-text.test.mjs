@@ -24,4 +24,21 @@ describe("splitTextByMaxBytes", () => {
     const chunks = splitTextByMaxBytes(`${long}\n`, { maxChunkBytes: 40 });
     assert.ok(chunks.length >= 2);
   });
+
+  it("splits ASCII under maxChunkBytes=1", () => {
+    const chunks = splitTextByMaxBytes("abcd\n", { maxChunkBytes: 1 });
+    assert.ok(chunks.length >= 1);
+    for (const c of chunks) {
+      assert.ok(Buffer.byteLength(c.text, "utf8") <= 1, `chunk too large: ${JSON.stringify(c.text)}`);
+    }
+  });
+
+  it("splits long single multibyte line under UTF-8 byte cap", () => {
+    const long = "あ".repeat(10);
+    const chunks = splitTextByMaxBytes(`${long}\n`, { maxChunkBytes: 3 });
+    assert.ok(chunks.length >= 10);
+    for (const c of chunks) {
+      assert.ok(Buffer.byteLength(c.text, "utf8") <= 3, `chunk too large: ${JSON.stringify(c.text)}`);
+    }
+  });
 });

@@ -71,6 +71,51 @@ describe("gemini-export validateConfig", () => {
     );
   });
 
+  it("throws when pack.chunkMaxLines exceeds upper bound", () => {
+    assert.throws(
+      () =>
+        validatePackConfig(
+          { outSubDir: "_pack", chunkMaxLines: 5001, bundleGroupDepth: 2 },
+          ".ai-context/out",
+          repoRoot
+        ),
+      /chunkMaxLines/
+    );
+  });
+
+  it("throws when pack.chunkMaxLines is not an integer", () => {
+    assert.throws(
+      () =>
+        validatePackConfig(
+          { outSubDir: "_pack", chunkMaxLines: 50.5, bundleGroupDepth: 2 },
+          ".ai-context/out",
+          repoRoot
+        ),
+      /chunkMaxLines/
+    );
+  });
+
+  it("throws when pack.bundleGroupDepth is out of range", () => {
+    assert.throws(
+      () =>
+        validatePackConfig(
+          { outSubDir: "_pack", chunkMaxLines: 300, bundleGroupDepth: 0 },
+          ".ai-context/out",
+          repoRoot
+        ),
+      /bundleGroupDepth/
+    );
+    assert.throws(
+      () =>
+        validatePackConfig(
+          { outSubDir: "_pack", chunkMaxLines: 300, bundleGroupDepth: 11 },
+          ".ai-context/out",
+          repoRoot
+        ),
+      /bundleGroupDepth/
+    );
+  });
+
   it("throws when pack.chunkMode='byte' and maxChunkBytes is missing/invalid", () => {
     assert.throws(
       () =>
@@ -135,6 +180,38 @@ describe("gemini-export validateConfig", () => {
           repoRoot
         ),
       /indexChunk\.maxChunkBytes must be a positive integer/
+    );
+  });
+
+  it("throws when pack is an array", () => {
+    assert.throws(
+      () =>
+        validateConfig(
+          {
+            ...defaultConfig,
+            sourcePaths: ["src"],
+            outDir: ".ai-context/out",
+            pack: []
+          },
+          repoRoot
+        ),
+      /pack must be a non-null object/
+    );
+  });
+
+  it("throws when indexChunk is an array", () => {
+    assert.throws(
+      () =>
+        validateConfig(
+          {
+            ...defaultConfig,
+            sourcePaths: ["src"],
+            outDir: ".ai-context/out",
+            indexChunk: []
+          },
+          repoRoot
+        ),
+      /indexChunk must be an object/
     );
   });
 });

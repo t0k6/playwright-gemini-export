@@ -150,7 +150,8 @@ export function splitTextByMaxBytes(text, { maxChunkBytes }) {
   let idx = 1;
 
   /**
-   * `s` の先頭から `maxChunkBytes` 以下になる最大 prefix を返す（空は返さない）。
+   * `s` の先頭から UTF-16 インデックスで見た最大 prefix で `Buffer.byteLength` が `maxChunkBytes` 以下になるものを返す。
+   * 先頭コードポイントが `maxChunkBytes` より大きい場合は **空文字**（呼び出し側でバイト境界切りにフォールバック）。
    * @param {string} s
    * @returns {string}
    */
@@ -159,13 +160,12 @@ export function splitTextByMaxBytes(text, { maxChunkBytes }) {
     // Quick path: whole string fits.
     if (Buffer.byteLength(s, "utf8") <= maxChunkBytes) return s;
 
-    let lo = 1;
+    let lo = 0;
     let hi = s.length;
-    let best = 1;
+    let best = 0;
     while (lo <= hi) {
       const mid = Math.floor((lo + hi) / 2);
-      const prefix = s.slice(0, mid);
-      const bytes = Buffer.byteLength(prefix, "utf8");
+      const bytes = Buffer.byteLength(s.slice(0, mid), "utf8");
       if (bytes <= maxChunkBytes) {
         best = mid;
         lo = mid + 1;
@@ -173,12 +173,10 @@ export function splitTextByMaxBytes(text, { maxChunkBytes }) {
         hi = mid - 1;
       }
     }
-
-    // Safety shrink in case of surrogate edge weirdness.
-    while (best > 1 && Buffer.byteLength(s.slice(0, best), "utf8") > maxChunkBytes) {
+    while (best > 0 && Buffer.byteLength(s.slice(0, best), "utf8") > maxChunkBytes) {
       best--;
     }
-    return s.slice(0, Math.max(1, best));
+    return s.slice(0, best);
   };
 
   const pushChunk = () => {
@@ -202,9 +200,29 @@ export function splitTextByMaxBytes(text, { maxChunkBytes }) {
       // Fall back to a hard split within a long line.
       let rest = lineWithNl;
       while (Buffer.byteLength(rest, "utf8") > maxChunkBytes) {
-        const slice = takePrefixWithinBytes(rest);
+        let slice = takePrefixWithinBytes(rest);
+        if (slice.length > 0) {
+          chunks.push({ index: idx++, text: slice });
+          rest = rest.slice(slice.length);
+          continue;
+        }
+        const rb = Buffer.from(rest, "utf8");
+        let cut = Math.min(maxChunkBytes, rb.length);
+        while (cut > 0) {
+          const part = rb.subarray(0, cut);
+          const decoded = part.toString("utf8");
+          if (Buffer.from(decoded, "utf8").equals(part)) {
+            slice = decoded;
+            break;
+          }
+          cut--;
+        }
+        if (slice.length === 0) {
+          cut = 1;
+          slice = rb.subarray(0, cut).toString("utf8");
+        }
         chunks.push({ index: idx++, text: slice });
-        rest = rest.slice(slice.length);
+        rest = rb.subarray(cut).toString("utf8");
       }
       buf = rest;
       bufBytes = Buffer.byteLength(buf, "utf8");

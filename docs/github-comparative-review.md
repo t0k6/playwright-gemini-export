@@ -90,7 +90,7 @@ git rebase origin/main   # またはmerge。方針に合わせる
 ## 5. 関連ファイル
 
 | 用途 | パス |
-|------|------|
+| --- | --- |
 | 親Issueテンプレ | [.github/ISSUE_TEMPLATE/integration-compare-review.md](../.github/ISSUE_TEMPLATE/integration-compare-review.md) |
 | PRチェックリスト | [.github/PULL_REQUEST_TEMPLATE/comparative-review.md](../.github/PULL_REQUEST_TEMPLATE/comparative-review.md) |
 | 比較用URLの出力 | [scripts/print-github-compare-urls.ps1](../scripts/print-github-compare-urls.ps1) |

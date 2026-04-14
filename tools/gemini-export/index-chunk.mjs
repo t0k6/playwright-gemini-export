@@ -11,6 +11,12 @@ import { chunkIdBaseFromRelPath, guessFileKind, splitTextByMaxBytes } from "../l
 /** `PROJECT_INDEX.md` 内の行数上限（ヘッダー＋ファイル行の合計がこの未満ならファイル行を追加）。 */
 export const PROJECT_INDEX_MAX_LINES = 120;
 
+/**
+ * `generateIndexAndChunks` 内の「## ファイル一覧（抜粋）」直前までの `projectIndexLines.push` 回数。
+ * 見出し・生成物・使い方ブロックを増減したらこの数値を合わせる。
+ */
+export const PROJECT_INDEX_HEADER_LINE_COUNT = 14;
+
 function languageFromExt(ext) {
   switch (ext) {
     case ".ts":
@@ -41,13 +47,15 @@ function languageFromExt(ext) {
  * `--check` 用: 読み取りルート上のファイルから index 行数・chunk 数を概算する。
  * @param {{
  *   readRootAbs: string,
- *   manifest: { copiedFiles?: string[] },
+ *   manifest: { copiedFiles?: string[], warnings?: string[] },
  *   indexChunkConfig: { maxChunkBytes: number, chunkExtensions?: string[] }
  * }} opts
+ * `stat` / `readFile` 失敗時は `manifest.warnings` に追記する（`--check` でも可視）。
  * @returns {Promise<{ pathRowCount: number, chunkEstimate: number }>}
  */
 export async function estimateIndexChunkSummary(opts) {
   const { readRootAbs, manifest, indexChunkConfig } = opts;
+  if (!Array.isArray(manifest.warnings)) manifest.warnings = [];
   const copiedFiles = Array.isArray(manifest.copiedFiles) ? manifest.copiedFiles : [];
 
   const allowedExts = new Set(
@@ -66,7 +74,9 @@ export async function estimateIndexChunkSummary(opts) {
     let stat;
     try {
       stat = await fs.stat(abs);
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      manifest.warnings.push(`[index-chunk estimate] cannot stat: ${relNorm} (${abs}): ${msg}`);
       continue;
     }
     if (!stat.isFile()) continue;
@@ -78,7 +88,9 @@ export async function estimateIndexChunkSummary(opts) {
     let text;
     try {
       text = await fs.readFile(abs, "utf8");
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      manifest.warnings.push(`[index-chunk estimate] cannot readFile: ${relNorm} (${abs}): ${msg}`);
       continue;
     }
 
@@ -206,9 +218,11 @@ export async function generateIndexAndChunks(manifest, outDirAbs, indexChunkConf
     const chunks = splitTextByMaxBytes(text, { maxChunkBytes: indexChunkConfig.maxChunkBytes });
     const idBase = chunkIdBaseFromRelPath(relNorm);
     const lang = languageFromExt(ext);
+    const maxDigits =
+      chunks.length <= 0 ? 1 : Math.max(1, String(chunks.length - 1).length);
 
     for (const c of chunks) {
-      const chunkId = `${idBase}__${String(c.index).padStart(3, "0")}`;
+      const chunkId = `${idBase}__${String(c.index).padStart(maxDigits, "0")}`;
       const chunkRel = normalizeRelPath(path.join(chunksDirRel, `${chunkId}.md`));
       const chunkAbs = path.join(outDirAbs, chunkRel);
       if (!isWithinBaseDir(chunkAbs, outDirAbs)) {

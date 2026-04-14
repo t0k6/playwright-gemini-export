@@ -5,6 +5,10 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
+import {
+  PROJECT_INDEX_HEADER_LINE_COUNT,
+  PROJECT_INDEX_MAX_LINES
+} from "../../tools/gemini-export/index-chunk.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..", "..");
@@ -382,7 +386,11 @@ describe("export-gemini-playwright-context CLI", () => {
       await copyFixture(tmp);
       const srcDir = path.join(tmp, "src");
       await fs.mkdir(srcDir, { recursive: true });
-      for (let i = 0; i < 107; i++) {
+      /** minimal-repo で PATH に載る想定の非 bulk 件数（sample.ts + fixtures/sandbox/user.json） */
+      const baselineIndexedFiles = 2;
+      const maxListedFiles = PROJECT_INDEX_MAX_LINES - PROJECT_INDEX_HEADER_LINE_COUNT;
+      const filesToCreate = Math.max(1, maxListedFiles - baselineIndexedFiles + 1);
+      for (let i = 0; i < filesToCreate; i++) {
         await fs.writeFile(path.join(srcDir, `bulk-${i}.ts`), `export const v${i} = ${i};\n`, "utf8");
       }
 

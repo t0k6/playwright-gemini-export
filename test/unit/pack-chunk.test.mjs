@@ -52,8 +52,36 @@ describe("pack-chunk", () => {
     assert.ok(y.includes("original_path:"));
   });
 
+  it("buildYamlFrontmatter quotes YAML-sensitive scalar values", () => {
+    const y = buildYamlFrontmatter({
+      original_path: "src/a.ts",
+      chunk: "1/1",
+      role: "other",
+      symbols: ["#comment"],
+      depends_on: ["x: y"]
+    });
+    assert.ok(y.includes('"#comment"'));
+    assert.ok(y.includes('"x: y"'));
+  });
+
   it("stripYamlFrontmatter removes first frontmatter", () => {
     const md = "---\nrole: spec\n---\n\nbody\n";
     assert.equal(stripYamlFrontmatter(md), "body\n");
+  });
+
+  it("stripYamlFrontmatter does not strip when inner block lacks YAML-like keys", () => {
+    const md = "---\nplain line\n---\n\nbody\n";
+    assert.equal(stripYamlFrontmatter(md), md);
+  });
+
+  it("buildYamlFrontmatter escapes tab and CR in quoted scalars", () => {
+    const y = buildYamlFrontmatter({
+      original_path: "src/a.ts",
+      chunk: "1/1",
+      role: "other",
+      symbols: ["a\tb\rc"]
+    });
+    assert.ok(y.includes("\\t"), y);
+    assert.ok(y.includes("\\r"), y);
   });
 });

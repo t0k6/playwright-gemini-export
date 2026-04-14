@@ -5,6 +5,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { guessFileKind } from "../lib/gemini-export-pure.mjs";
 import { countLinesForPack, inferRole } from "./pack-helpers.mjs";
 export const PROJECT_INDEX_MAX_ROWS = 120;
 
@@ -68,14 +69,19 @@ export async function writePackIndex(opts) {
   for (const rel of packableRelPaths) {
     const normalized = rel.replace(/\\/g, "/");
     const abs = path.join(readRootAbs, ...normalized.split("/"));
-    const text = await fs.readFile(abs, "utf8");
-    const st = await fs.stat(abs);
-    const lineCount = countLinesForPack(text);
-    const ext = path.extname(normalized).toLowerCase();
-    const role = inferRole(normalized);
-    const kind = role;
-    const chunkRelPaths = chunkByPath.get(normalized) ?? [];
-    rows.push({ path: normalized, role, kind, lineCount, sizeBytes: st.size, ext, chunkRelPaths, summary: "" });
+    try {
+      const text = await fs.readFile(abs, "utf8");
+      const st = await fs.stat(abs);
+      const lineCount = countLinesForPack(text);
+      const ext = path.extname(normalized).toLowerCase();
+      const role = inferRole(normalized);
+      const kind = guessFileKind(normalized);
+      const chunkRelPaths = chunkByPath.get(normalized) ?? [];
+      rows.push({ path: normalized, role, kind, lineCount, sizeBytes: st.size, ext, chunkRelPaths, summary: "" });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`[pack-index] skip path: ${normalized} (${abs}): ${msg}`);
+    }
   }
 
   const treePathsPosix = packableRelPaths.map((p) => p.replace(/\\/g, "/"));

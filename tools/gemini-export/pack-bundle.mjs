@@ -9,6 +9,20 @@ import { bundleFileName, dirKeyFromPath } from "./pack-helpers.mjs";
 import { stripYamlFrontmatter } from "./pack-chunk.mjs";
 
 /**
+ * `key` は `` `${dirKey}|${role}` ``。`dirKey` と `role` に `|` を含めないこと（区切り専用）。
+ * 将来 `|` を含む値が来た場合は **最後の** `|` で2分割する。
+ * @param {string} key
+ * @returns {{ dirKey: string, role: string }}
+ */
+function dirKeyAndRoleFromBundleKey(key) {
+  const i = key.lastIndexOf("|");
+  if (i === -1) {
+    return { dirKey: key, role: "other" };
+  }
+  return { dirKey: key.slice(0, i), role: key.slice(i + 1) };
+}
+
+/**
  * @param {{
  *   packRootAbs: string,
  *   chunkRecords: Array<{ originalPath: string, role: string, chunkRelPaths: string[] }>,
@@ -27,6 +41,7 @@ export async function writePackBundles(opts) {
 
   for (const rec of chunkRecords) {
     const dk = dirKeyFromPath(rec.originalPath, depth);
+    // Invariant: dk と rec.role に "|" を含めない（bundleFileName は dirKey/role をそのまま使う）。
     const key = `${dk}|${rec.role}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(rec);
@@ -37,7 +52,7 @@ export async function writePackBundles(opts) {
 
   const keysSorted = [...groups.keys()].sort();
   for (const key of keysSorted) {
-    const [dirKey, role] = key.split("|");
+    const { dirKey, role } = dirKeyAndRoleFromBundleKey(key);
     const name = bundleFileName(dirKey, role);
     const recs = groups.get(key);
     if (!recs) continue;
@@ -50,9 +65,14 @@ export async function writePackBundles(opts) {
       body += `## \`${rec.originalPath}\`\n\n`;
       for (const chunkRel of rec.chunkRelPaths) {
         const chunkAbs = path.join(packRootAbs, ...chunkRel.split("/"));
-        const chunkText = await fs.readFile(chunkAbs, "utf8");
-        const stripped = stripYamlFrontmatter(chunkText);
-        body += stripped.trimEnd() + "\n\n";
+        try {
+          const chunkText = await fs.readFile(chunkAbs, "utf8");
+          const stripped = stripYamlFrontmatter(chunkText);
+          body += stripped.trimEnd() + "\n\n";
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.warn(`[pack-bundle] skip chunk: ${chunkRel} (${chunkAbs}): ${msg}`);
+        }
       }
     }
 

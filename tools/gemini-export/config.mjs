@@ -75,15 +75,16 @@ export function validateConfig(config, repoRoot) {
   }
 
   if (typeof config.pack !== "undefined") {
-    if (typeof config.pack !== "object" || config.pack === null) {
-      const t = config.pack === null ? "null" : typeof config.pack;
+    if (typeof config.pack !== "object" || config.pack === null || Array.isArray(config.pack)) {
+      const t =
+        config.pack === null ? "null" : Array.isArray(config.pack) ? "array" : typeof config.pack;
       throw new TypeError(`pack must be a non-null object, got: ${t}`);
     }
     validatePackConfig(config.pack, config.outDir, repoRoot);
   }
 
   if (typeof config.indexChunk !== "undefined") {
-    if (typeof config.indexChunk !== "object" || config.indexChunk === null) {
+    if (typeof config.indexChunk !== "object" || config.indexChunk === null || Array.isArray(config.indexChunk)) {
       throw new Error("indexChunk must be an object.");
     }
     const ic = config.indexChunk;
@@ -137,8 +138,14 @@ export function validatePackConfig(pack, outDir, repoRoot) {
   }
 
   const maxLines = pack.chunkMaxLines;
-  if (typeof maxLines !== "number" || !Number.isFinite(maxLines) || maxLines < 50 || maxLines > 5000) {
-    throw new Error("pack.chunkMaxLines must be a number between 50 and 5000.");
+  if (
+    typeof maxLines !== "number" ||
+    !Number.isFinite(maxLines) ||
+    !Number.isInteger(maxLines) ||
+    maxLines < 50 ||
+    maxLines > 5000
+  ) {
+    throw new Error("pack.chunkMaxLines must be an integer between 50 and 5000.");
   }
   if (mode === "byte") {
     const maxBytes = pack.maxChunkBytes;

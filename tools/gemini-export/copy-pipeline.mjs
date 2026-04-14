@@ -49,6 +49,7 @@ import { looksLikeText, looksSensitiveByHeuristic, sha256 } from "./text-utils.m
  *   anonymizedFiles: { file: string, fieldsChanged: string[], beforeSha256: string, afterSha256: string }[],
  *   warnings: string[]
  * }} manifest
+ * @property {Set<string>} copiedFilesSet `manifest.copiedFiles` と同期した重複検査用
  * @property {boolean} checkOnly
  * @property {object} anonymizeConfig `normalizeAnonymizeConfig()` の戻り値（enabled と Set フィールドを含む）
  */
@@ -137,6 +138,7 @@ export async function copyOneFile(ctx, { srcAbs, relSourcePath, isExplicitInclud
     redactRules,
     maxFileSizeBytes,
     manifest,
+    copiedFilesSet,
     checkOnly,
     anonymizeConfig,
     repoRoot
@@ -146,7 +148,7 @@ export async function copyOneFile(ctx, { srcAbs, relSourcePath, isExplicitInclud
   const basename = path.basename(normalizedRel);
   const ext = normalizeExt(path.extname(normalizedRel));
 
-  if (manifest.copiedFiles.includes(normalizedRel)) {
+  if (copiedFilesSet.has(normalizedRel)) {
     return;
   }
 
@@ -262,6 +264,7 @@ export async function copyOneFile(ctx, { srcAbs, relSourcePath, isExplicitInclud
   }
 
   manifest.copiedFiles.push(normalizedRel);
+  copiedFilesSet.add(normalizedRel);
 
   if (redacted) {
     manifest.redactedFiles.push({

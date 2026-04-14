@@ -10,8 +10,12 @@ import {
   relPathHasParentSegment,
   uniqueNormalizedPaths
 } from "../../tools/gemini-export/paths.mjs";
-import { applyRedactions, buildRedactRules } from "../../tools/lib/gemini-export-pure.mjs";
-import { chunkIdBaseFromRelPath, splitTextByMaxBytes } from "../../tools/lib/gemini-export-pure.mjs";
+import {
+  applyRedactions,
+  buildRedactRules,
+  chunkIdBaseFromRelPath,
+  splitTextByMaxBytes
+} from "../../tools/lib/gemini-export-pure.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const fakeRepoRoot = path.join(__dirname, "_fake_repo_root_marker");

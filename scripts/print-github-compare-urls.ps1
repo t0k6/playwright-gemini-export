@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     GitHub compare 用の URL を3本（BASE...A, BASE...B, A...B）出力する。
 
@@ -16,9 +16,15 @@
 #>
 param(
     [string] $OwnerRepo = "t0k6/playwright-gemini-export",
-    [Parameter(Mandatory = $true)][string] $Base,
-    [Parameter(Mandatory = $true)][string] $BranchA,
-    [Parameter(Mandatory = $true)][string] $BranchB
+    [Parameter(Mandatory = $true)]
+    [ValidateNotNullOrEmpty()]
+    [string] $Base,
+    [Parameter(Mandatory = $true)]
+    [ValidateNotNullOrEmpty()]
+    [string] $BranchA,
+    [Parameter(Mandatory = $true)]
+    [ValidateNotNullOrEmpty()]
+    [string] $BranchB
 )
 
 function ConvertTo-EncodedBranchSegment([string] $s) {
@@ -30,6 +36,6 @@ $bA = ConvertTo-EncodedBranchSegment $BranchA
 $bB = ConvertTo-EncodedBranchSegment $BranchB
 $bBase = ConvertTo-EncodedBranchSegment $Base
 
-Write-Host "BASE...A : $root/$bBase...$bA"
-Write-Host "BASE...B : $root/$bBase...$bB"
-Write-Host "A...B    : $root/$bA...$bB"
+Write-Output "BASE...A : $root/$bBase...$bA"
+Write-Output "BASE...B : $root/$bBase...$bB"
+Write-Output "A...B    : $root/$bA...$bB"

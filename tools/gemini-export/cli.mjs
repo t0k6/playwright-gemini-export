@@ -152,6 +152,7 @@ export async function runCli() {
     redactRules,
     maxFileSizeBytes: configForRun.maxFileSizeBytes,
     manifest,
+    copiedFilesSet: new Set(manifest.copiedFiles),
     checkOnly,
     anonymizeConfig
   };
