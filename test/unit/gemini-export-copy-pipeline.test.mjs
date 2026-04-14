@@ -32,6 +32,7 @@ function baseCtx(repoRoot, outDirAbs, manifest, overrides = {}) {
     redactRules: buildRedactRules([]),
     maxFileSizeBytes: 512 * 1024,
     manifest,
+    copiedFilesSet: new Set(manifest.copiedFiles),
     checkOnly: false,
     anonymizeConfig: { enabled: false },
     ...overrides

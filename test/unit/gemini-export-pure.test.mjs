@@ -10,7 +10,12 @@ import {
   relPathHasParentSegment,
   uniqueNormalizedPaths
 } from "../../tools/gemini-export/paths.mjs";
-import { applyRedactions, buildRedactRules } from "../../tools/lib/gemini-export-pure.mjs";
+import {
+  applyRedactions,
+  buildRedactRules,
+  chunkIdBaseFromRelPath,
+  splitTextByMaxBytes
+} from "../../tools/lib/gemini-export-pure.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const fakeRepoRoot = path.join(__dirname, "_fake_repo_root_marker");
@@ -199,6 +204,33 @@ describe("gemini-export (paths + config re-exports, pure redact)", () => {
           assert.doesNotMatch(text, new RegExp(leaked), title);
         });
       }
+    });
+  });
+
+  describe("chunking helpers", () => {
+    it("builds stable chunk id base from path (flat + hash suffix)", () => {
+      assert.equal(
+        chunkIdBaseFromRelPath("playwright/tests/auth/login.spec.ts"),
+        "playwright__tests__auth__login.spec.ts__h1c67dbf4"
+      );
+    });
+
+    it("chunkIdBaseFromRelPath distinguishes paths that flatten to the same string", () => {
+      const a = chunkIdBaseFromRelPath("src/a/b.ts");
+      const b = chunkIdBaseFromRelPath("src/a__b.ts");
+      assert.notEqual(a, b);
+      assert.match(a, /^src__a__b\.ts__h[0-9a-f]{8}$/);
+      assert.match(b, /^src__a__b\.ts__h[0-9a-f]{8}$/);
+      assert.equal(a, "src__a__b.ts__heb704146");
+      assert.equal(b, "src__a__b.ts__hba8f07e2");
+    });
+
+    it("splits text by maxChunkBytes (line-based)", () => {
+      const input = ["aaa", "bbb", "ccc", "ddd", "eee"].join("\n") + "\n";
+      const chunks = splitTextByMaxBytes(input, { maxChunkBytes: 8 });
+      assert.ok(chunks.length >= 2);
+      assert.equal(chunks[0].index, 1);
+      assert.equal(typeof chunks[0].text, "string");
     });
   });
 });

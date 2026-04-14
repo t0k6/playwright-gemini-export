@@ -5,6 +5,11 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
+import {
+  PROJECT_INDEX_HEADER_LINE_COUNT,
+  PROJECT_INDEX_MAX_LINES
+} from "../../tools/gemini-export/index-chunk.mjs";
+import { escapePathForChunkBase } from "../../tools/gemini-export/pack-helpers.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..", "..");
@@ -62,6 +67,102 @@ describe("export-gemini-playwright-context CLI", () => {
       await assert.rejects(() => fs.access(path.join(outRoot, "src", "image.png")), {
         code: "ENOENT"
       });
+
+      await assert.rejects(() => fs.access(path.join(outRoot, "PROJECT_INDEX.md")), {
+        code: "ENOENT"
+      });
+      await assert.rejects(() => fs.access(path.join(outRoot, "PATH_INDEX.jsonl")), {
+        code: "ENOENT"
+      });
+      await assert.rejects(() => fs.access(path.join(outRoot, "chunks")), { code: "ENOENT" });
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("generates PROJECT_INDEX, PATH_INDEX, and chunks when indexChunk is enabled", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
+    try {
+      await copyFixture(tmp);
+      const cfgPath = path.join(tmp, ".gemini-export.json");
+      const cfg = JSON.parse(await fs.readFile(cfgPath, "utf8"));
+      cfg.indexChunk = { enabled: true, maxChunkBytes: 2048 };
+      await fs.writeFile(cfgPath, JSON.stringify(cfg), "utf8");
+
+      const { code, stderr } = await runExport(tmp);
+      assert.equal(code, 0, stderr);
+
+      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      await fs.access(path.join(outRoot, "PROJECT_INDEX.md"));
+      await fs.access(path.join(outRoot, "PATH_INDEX.jsonl"));
+      const chunkDir = path.join(outRoot, "chunks");
+      const entries = await fs.readdir(chunkDir);
+      assert.ok(entries.some((n) => n.endsWith(".md")), `expected chunk md files, got: ${entries.join(",")}`);
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("exits non-zero when indexChunk is an array (CLI guard before merge)", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
+    try {
+      await copyFixture(tmp);
+      const cfgPath = path.join(tmp, ".gemini-export.json");
+      const cfg = JSON.parse(await fs.readFile(cfgPath, "utf8"));
+      cfg.indexChunk = [];
+      await fs.writeFile(cfgPath, JSON.stringify(cfg), "utf8");
+      const { code, stderr } = await runExport(tmp);
+      assert.notEqual(code, 0, stderr);
+      assert.match(stderr + "", /indexChunk must be a non-null object/);
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("manifest.json and README_FOR_AI reflect indexChunk; PATH_INDEX and chunks have required metadata", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
+    try {
+      await copyFixture(tmp);
+      const cfgPath = path.join(tmp, ".gemini-export.json");
+      const cfg = JSON.parse(await fs.readFile(cfgPath, "utf8"));
+      cfg.indexChunk = { enabled: true, maxChunkBytes: 2048 };
+      cfg.generateAiReadme = true;
+      await fs.writeFile(cfgPath, JSON.stringify(cfg), "utf8");
+
+      const { code, stderr } = await runExport(tmp);
+      assert.equal(code, 0, stderr);
+
+      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      const man = JSON.parse(await fs.readFile(path.join(outRoot, "manifest.json"), "utf8"));
+      assert.ok(Array.isArray(man.indexFiles));
+      assert.ok(man.indexFiles.includes("PROJECT_INDEX.md"));
+      assert.ok(man.indexFiles.includes("PATH_INDEX.jsonl"));
+      assert.ok(Array.isArray(man.chunkFiles));
+      assert.ok(man.chunkCount > 0);
+      assert.equal(man.chunkFiles.length, man.chunkCount);
+
+      const readme = await fs.readFile(path.join(outRoot, "README_FOR_AI.md"), "utf8");
+      assert.match(readme, /chunkCount: [1-9]\d*/);
+      assert.match(readme, /PROJECT_INDEX\.md/);
+      assert.match(readme, /PATH_INDEX\.jsonl/);
+
+      const jsonl = await fs.readFile(path.join(outRoot, "PATH_INDEX.jsonl"), "utf8");
+      const firstLine = jsonl.trim().split("\n").find((l) => l.length > 0);
+      assert.ok(firstLine);
+      const row = JSON.parse(firstLine);
+      assert.ok(typeof row.path === "string" && row.path.length > 0);
+      assert.ok(typeof row.kind === "string");
+      assert.ok(typeof row.ext === "string");
+      assert.ok(typeof row.sizeBytes === "number");
+
+      const chunkDir = path.join(outRoot, "chunks");
+      const chunkName = (await fs.readdir(chunkDir)).find((n) => n.endsWith(".md"));
+      assert.ok(chunkName);
+      const chunkText = await fs.readFile(path.join(chunkDir, chunkName), "utf8");
+      assert.match(chunkText, /^---\r?\n/m);
+      assert.match(chunkText, /^original_path:/m);
+      assert.match(chunkText, /^chunk_id:/m);
+      assert.match(chunkText, /^kind:/m);
     } finally {
       await fs.rm(tmp, { recursive: true, force: true });
     }
@@ -71,6 +172,57 @@ describe("export-gemini-playwright-context CLI", () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
     try {
       await copyFixture(tmp);
+      const { code, stderr } = await runExport(tmp, ["--check"]);
+      assert.equal(code, 0, stderr);
+      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      await assert.rejects(() => fs.access(outRoot), { code: "ENOENT" });
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("--index-chunk forces index/chunk when fixture has indexChunk.enabled false", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
+    try {
+      await copyFixture(tmp);
+      const { code, stderr } = await runExport(tmp, ["--index-chunk"]);
+      assert.equal(code, 0, stderr);
+
+      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      await fs.access(path.join(outRoot, "PROJECT_INDEX.md"));
+      await fs.access(path.join(outRoot, "PATH_INDEX.jsonl"));
+      const chunkDir = path.join(outRoot, "chunks");
+      const entries = await fs.readdir(chunkDir);
+      assert.ok(entries.some((n) => n.endsWith(".md")), `expected chunk md files, got: ${entries.join(",")}`);
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("--check --index-chunk prints dry-run estimate without writing outDir", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
+    try {
+      await copyFixture(tmp);
+      const { code, stdout, stderr } = await runExport(tmp, ["--check", "--index-chunk"]);
+      assert.equal(code, 0, stderr);
+      assert.match(stdout, /Index\/chunk \(dry-run\)/);
+
+      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      await assert.rejects(() => fs.access(outRoot), { code: "ENOENT" });
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("--check does not create outDir when indexChunk is enabled", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
+    try {
+      await copyFixture(tmp);
+      const cfgPath = path.join(tmp, ".gemini-export.json");
+      const cfg = JSON.parse(await fs.readFile(cfgPath, "utf8"));
+      cfg.indexChunk = { enabled: true };
+      await fs.writeFile(cfgPath, JSON.stringify(cfg), "utf8");
+
       const { code, stderr } = await runExport(tmp, ["--check"]);
       assert.equal(code, 0, stderr);
       const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
@@ -147,6 +299,137 @@ describe("export-gemini-playwright-context CLI", () => {
       const { code, stderr } = await runExport(tmp);
       assert.notEqual(code, 0);
       assert.match(stderr, /outDir|Error/i);
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("exports with --pack creates _pack artifacts", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
+    try {
+      await copyFixture(tmp);
+      const { code, stderr } = await runExport(tmp, ["--pack"]);
+      assert.equal(code, 0, stderr);
+
+      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      const packRoot = path.join(outRoot, "_pack");
+      await fs.access(path.join(packRoot, "PROJECT_INDEX.md"));
+      await fs.access(path.join(packRoot, "DIRECTORY_TREE.md"));
+      await fs.access(path.join(packRoot, "PATH_INDEX.jsonl"));
+      const expectedChunkName = `${escapePathForChunkBase("src/sample.ts")}.md`;
+      await fs.access(path.join(packRoot, "chunks", expectedChunkName));
+      const bundles = await fs.readdir(path.join(packRoot, "bundles"));
+      assert.ok(bundles.some((n) => n.startsWith("bundle-src-other")), bundles.join(","));
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("--check --pack prints dry-run summary without _pack dir", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
+    try {
+      await copyFixture(tmp);
+      const { code, stdout, stderr } = await runExport(tmp, ["--check", "--pack"]);
+      assert.equal(code, 0, stderr);
+      assert.match(stdout, /Pack \(dry-run\)/);
+      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      await assert.rejects(() => fs.access(path.join(outRoot, "_pack")), { code: "ENOENT" });
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("--pack with generateAiReadme documents _pack in README_FOR_AI", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
+    try {
+      await copyFixture(tmp);
+      const cfgPath = path.join(tmp, ".gemini-export.json");
+      const cfg = JSON.parse(await fs.readFile(cfgPath, "utf8"));
+      cfg.generateAiReadme = true;
+      await fs.writeFile(cfgPath, JSON.stringify(cfg), "utf8");
+
+      const { code, stderr } = await runExport(tmp, ["--pack"]);
+      assert.equal(code, 0, stderr);
+
+      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      const readme = await fs.readFile(path.join(outRoot, "README_FOR_AI.md"), "utf8");
+      assert.match(readme, /Pack output/);
+      assert.match(readme, /`_pack\/PROJECT_INDEX\.md`/);
+      const man = JSON.parse(await fs.readFile(path.join(outRoot, "manifest.json"), "utf8"));
+      assert.ok(man.copiedFiles.some((p) => p.startsWith("_pack/")), man.copiedFiles.join(","));
+      assert.match(readme, /copiedFiles: [1-9]\d*/);
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("does not duplicate copiedFiles when sourcePaths and includeFiles both list package.json", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
+    try {
+      await copyFixture(tmp);
+      await fs.writeFile(path.join(tmp, "package.json"), JSON.stringify({ name: "dup-test" }), "utf8");
+      const cfgPath = path.join(tmp, ".gemini-export.json");
+      const cfg = JSON.parse(await fs.readFile(cfgPath, "utf8"));
+      cfg.sourcePaths = ["src", "package.json"];
+      await fs.writeFile(cfgPath, JSON.stringify(cfg), "utf8");
+
+      const { code, stderr } = await runExport(tmp, ["--pack"]);
+      assert.equal(code, 0, stderr);
+
+      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      const man = JSON.parse(await fs.readFile(path.join(outRoot, "manifest.json"), "utf8"));
+      const pkgEntries = man.copiedFiles.filter((p) => p === "package.json");
+      assert.equal(pkgEntries.length, 1, `expected single package.json, got: ${JSON.stringify(pkgEntries)}`);
+
+      const jsonl = await fs.readFile(path.join(outRoot, "_pack", "PATH_INDEX.jsonl"), "utf8");
+      const pkgRows = jsonl
+        .trim()
+        .split("\n")
+        .filter((line) => {
+          try {
+            return JSON.parse(line).path === "package.json";
+          } catch {
+            return false;
+          }
+        });
+      assert.equal(pkgRows.length, 1);
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("PROJECT_INDEX shows omission note when file list exceeds cap", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-many-"));
+    try {
+      await copyFixture(tmp);
+      const cfgPath = path.join(tmp, ".gemini-export.json");
+      const cfg = JSON.parse(await fs.readFile(cfgPath, "utf8"));
+      cfg.indexChunk = { enabled: true, maxChunkBytes: 2048 };
+      await fs.writeFile(cfgPath, JSON.stringify(cfg), "utf8");
+
+      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      const { code: code0, stderr: stderr0 } = await runExport(tmp);
+      assert.equal(code0, 0, stderr0);
+      const jsonl0 = await fs.readFile(path.join(outRoot, "PATH_INDEX.jsonl"), "utf8");
+      const baselineIndexedFiles = jsonl0
+        .trim()
+        .split("\n")
+        .filter((line) => line.length > 0).length;
+      await fs.rm(outRoot, { recursive: true, force: true });
+
+      const srcDir = path.join(tmp, "src");
+      await fs.mkdir(srcDir, { recursive: true });
+      const maxListedFiles = PROJECT_INDEX_MAX_LINES - PROJECT_INDEX_HEADER_LINE_COUNT;
+      const filesToCreate = Math.max(1, maxListedFiles - baselineIndexedFiles + 1);
+      for (let i = 0; i < filesToCreate; i++) {
+        await fs.writeFile(path.join(srcDir, `bulk-${i}.ts`), `export const v${i} = ${i};\n`, "utf8");
+      }
+
+      const { code, stderr } = await runExport(tmp);
+      assert.equal(code, 0, stderr);
+
+      const projectIndex = await fs.readFile(path.join(outRoot, "PROJECT_INDEX.md"), "utf8");
+      assert.match(projectIndex, /一覧省略/);
     } finally {
       await fs.rm(tmp, { recursive: true, force: true });
     }

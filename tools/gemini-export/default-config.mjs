@@ -7,6 +7,14 @@
 export const defaultConfig = {
   sourcePaths: [],
   outDir: ".ai-context/playwright-gemini",
+  indexChunk: {
+    enabled: false,
+    projectIndexFile: "PROJECT_INDEX.md",
+    pathIndexFile: "PATH_INDEX.jsonl",
+    chunksDir: "chunks",
+    maxChunkBytes: 48 * 1024,
+    chunkExtensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".md", ".json", ".yml", ".yaml", ".txt"]
+  },
   includeExtensions: [
     ".ts",
     ".tsx",
@@ -136,5 +144,13 @@ export const defaultConfig = {
       "accountId",
       "contractId"
     ]
+  },
+  /** `--pack` 用: index / chunk / bundle の既定値。`.gemini-export.json` の `pack` で上書き可能。 */
+  pack: {
+    chunkMode: "line",
+    chunkMaxLines: 300,
+    maxChunkBytes: 48 * 1024,
+    bundleGroupDepth: 2,
+    outSubDir: "_pack"
   }
 };

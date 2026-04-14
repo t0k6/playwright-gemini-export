@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import path from "node:path";
 
 export function assertWithinRepoRoot(
@@ -123,4 +124,138 @@ export function applyRedactions(text, redactRules) {
     }
   }
   return { text: t, redacted };
+}
+
+/**
+ * index-chunk 用の chunk_id ベース（ファイル名安全）。スラッシュを `__` にしたあと、正規化パス（`\\`→`/`）の SHA-256 先頭8hex を `__h` で付与し、`src/a/b.ts` と `src/a__b.ts` の衝突を避ける。
+ * @param {string} relPath リポジトリ相対パス
+ * @returns {string}
+ */
+export function chunkIdBaseFromRelPath(relPath) {
+  const n = String(relPath).replace(/\\/g, "/");
+  const flat = n.replace(/\//g, "__");
+  const h = createHash("sha256").update(n, "utf8").digest("hex").slice(0, 8);
+  return `${flat}__h${h}`;
+}
+
+/**
+ * Split text into chunks with an approximate UTF-8 byte cap.
+ * Chunk boundaries are line-based to preserve readability.
+ * @param {string} text
+ * @param {{ maxChunkBytes: number }} opts
+ * @returns {{ index: number, text: string }[]}
+ */
+export function splitTextByMaxBytes(text, { maxChunkBytes }) {
+  if (typeof maxChunkBytes !== "number" || !Number.isFinite(maxChunkBytes) || maxChunkBytes < 4) {
+    throw new Error("splitTextByMaxBytes: maxChunkBytes must be a finite number >= 4");
+  }
+  const lines = String(text).split(/\r?\n/);
+  const chunks = [];
+
+  let buf = "";
+  let bufBytes = 0;
+  let idx = 1;
+
+  /**
+   * `s` の先頭から UTF-16 インデックスで見た最大 prefix で `Buffer.byteLength` が `maxChunkBytes` 以下になるものを返す。
+   * 先頭コードポイントが `maxChunkBytes` より大きい場合は **空文字**（呼び出し側でバイト境界切りにフォールバック）。
+   * @param {string} s
+   * @returns {string}
+   */
+  const takePrefixWithinBytes = (s) => {
+    if (s.length === 0) return "";
+    // Quick path: whole string fits.
+    if (Buffer.byteLength(s, "utf8") <= maxChunkBytes) return s;
+
+    let lo = 0;
+    let hi = s.length;
+    let best = 0;
+    while (lo <= hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      const bytes = Buffer.byteLength(s.slice(0, mid), "utf8");
+      if (bytes <= maxChunkBytes) {
+        best = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    while (best > 0 && Buffer.byteLength(s.slice(0, best), "utf8") > maxChunkBytes) {
+      best--;
+    }
+    return s.slice(0, best);
+  };
+
+  const pushChunk = () => {
+    const out = buf.replace(/\n+$/u, "");
+    if (out.length === 0) return;
+    chunks.push({ index: idx++, text: out + "\n" });
+    buf = "";
+    bufBytes = 0;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const lineWithNl = i === lines.length - 1 ? line : `${line}\n`;
+    const lineBytes = Buffer.byteLength(lineWithNl, "utf8");
+
+    if (bufBytes > 0 && bufBytes + lineBytes > maxChunkBytes) {
+      pushChunk();
+    }
+
+    if (lineBytes > maxChunkBytes) {
+      // Fall back to a hard split within a long line.
+      let rest = lineWithNl;
+      while (Buffer.byteLength(rest, "utf8") > maxChunkBytes) {
+        let slice = takePrefixWithinBytes(rest);
+        if (slice.length > 0) {
+          chunks.push({ index: idx++, text: slice });
+          rest = rest.slice(slice.length);
+          continue;
+        }
+        const rb = Buffer.from(rest, "utf8");
+        let cut = Math.min(maxChunkBytes, rb.length);
+        while (cut > 0) {
+          const part = rb.subarray(0, cut);
+          const decoded = part.toString("utf8");
+          if (Buffer.from(decoded, "utf8").equals(part)) {
+            slice = decoded;
+            break;
+          }
+          cut--;
+        }
+        if (slice.length === 0) {
+          cut = 1;
+          slice = rb.subarray(0, cut).toString("utf8");
+        }
+        chunks.push({ index: idx++, text: slice });
+        rest = rb.subarray(cut).toString("utf8");
+      }
+      buf = rest;
+      bufBytes = Buffer.byteLength(buf, "utf8");
+      continue;
+    }
+
+    buf += lineWithNl;
+    bufBytes += lineBytes;
+  }
+
+  pushChunk();
+  return chunks;
+}
+
+/**
+ * Best-effort kind classification for index output.
+ * @param {string} relPath
+ * @returns {string}
+ */
+export function guessFileKind(relPath) {
+  const p = String(relPath).toLowerCase();
+  if (/(^|\/)tests?\//.test(p) || /(\.|\/)(spec|test)\.(ts|tsx|js|jsx|mjs|cjs)$/.test(p)) return "spec";
+  if (/(^|\/)pages?\//.test(p)) return "page";
+  if (/(^|\/)helpers?\//.test(p) || /(^|\/)utils?\//.test(p)) return "helper";
+  if (/(^|\/)fixtures?\//.test(p)) return "fixture";
+  if (/playwright\.config\.(ts|js|mjs|cjs)$/.test(p) || /(^|\/)tsconfig\.json$/.test(p)) return "config";
+  if (/\.(md|txt)$/.test(p)) return "doc";
+  return "file";
 }

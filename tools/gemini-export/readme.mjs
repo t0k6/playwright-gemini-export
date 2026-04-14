@@ -10,11 +10,33 @@
  *   redactedFiles: unknown[],
  *   anonymizedFiles: unknown[],
  *   skippedFiles: string[],
- *   warnings: string[]
+ *   warnings: string[],
+ *   indexFiles?: string[],
+ *   chunkCount?: number
  * }} manifest
+ * @param {{ packOutSubDir?: string }} [opts]
  * @returns {string}
  */
-export function buildAiReadme(manifest) {
+export function buildAiReadme(manifest, opts = {}) {
+  const packOutSubDir = opts.packOutSubDir;
+  const indexFiles = Array.isArray(manifest.indexFiles) ? manifest.indexFiles : [];
+  const chunkCount = typeof manifest.chunkCount === "number" ? manifest.chunkCount : 0;
+  const packSection =
+    typeof packOutSubDir === "string" && packOutSubDir.length > 0
+      ? `
+
+## Pack output (index / chunks / bundles)
+This export was produced with \`--pack\`. Use these under \`${packOutSubDir}/\` as the primary entry points for Gemini or NotebookLM:
+
+- \`${packOutSubDir}/PROJECT_INDEX.md\` — file table and tree excerpt
+- \`${packOutSubDir}/DIRECTORY_TREE.md\` — directory tree only
+- \`${packOutSubDir}/PATH_INDEX.jsonl\` — one JSON object per line (machine-readable)
+- \`${packOutSubDir}/chunks/\` — per-file reading chunks (attach as needed)
+- \`${packOutSubDir}/bundles/\` — role- and directory-grouped bundles
+
+See \`docs/gemini-workflow.md\` in this tool repository for suggested usage.
+`
+      : "";
   return `# README_FOR_AI
 
 ## Purpose
@@ -22,6 +44,10 @@ This export is a sanitized subset of a Playwright E2E test codebase for AI-assis
 
 ## Included scope
 ${manifest.sourcePaths.map((p) => `- \`${p}\``).join("\n")}
+
+## Index and chunks
+- indexFiles: ${indexFiles.length > 0 ? indexFiles.map((p) => `\`${p}\``).join(", ") : "(not generated)"}
+- chunkCount: ${chunkCount}
 
 ## Important constraints
 - Some files and directories are intentionally excluded
@@ -34,7 +60,7 @@ ${manifest.sourcePaths.map((p) => `- \`${p}\``).join("\n")}
 - reuse fixtures, helpers, and page objects where possible
 - avoid brittle locators and arbitrary waits
 - state uncertainty when necessary files appear to be omitted
-
+${packSection}
 ## Export summary
 - copiedFiles: ${manifest.copiedFiles.length}
 - redactedFiles: ${manifest.redactedFiles.length}
