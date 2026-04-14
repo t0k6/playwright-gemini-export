@@ -91,15 +91,15 @@ export function validateConfig(config, repoRoot) {
     if (typeof ic.enabled !== "boolean") {
       throw new Error("indexChunk.enabled must be boolean.");
     }
+    if (!Number.isFinite(ic.maxChunkBytes) || !Number.isInteger(ic.maxChunkBytes) || ic.maxChunkBytes < 4) {
+      throw new Error("indexChunk.maxChunkBytes must be an integer >= 4 (UTF-8 safe chunking).");
+    }
     if (ic.enabled) {
       for (const key of ["projectIndexFile", "pathIndexFile", "chunksDir"]) {
         if (typeof ic[key] !== "string" || ic[key].length === 0) {
           throw new Error(`indexChunk.${key} must be a non-empty string.`);
         }
         assertSafeRelPath(ic[key], repoRoot);
-      }
-      if (!Number.isFinite(ic.maxChunkBytes) || !Number.isInteger(ic.maxChunkBytes) || ic.maxChunkBytes < 4) {
-        throw new Error("indexChunk.maxChunkBytes must be an integer >= 4 (UTF-8 safe chunking).");
       }
       if (typeof ic.chunkExtensions !== "undefined") {
         if (!Array.isArray(ic.chunkExtensions)) {

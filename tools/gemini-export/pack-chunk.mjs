@@ -198,8 +198,19 @@ export async function writePackChunks(opts) {
       const md = `${fm}\n\n${fence}\n`;
       if (!checkOnly) {
         const dest = path.join(chunksDirAbs, chunkName);
+        const tmp = `${dest}.tmp-${process.pid}-${Math.random().toString(16).slice(2)}`;
         await fs.mkdir(path.dirname(dest), { recursive: true });
-        await fs.writeFile(dest, md, "utf8");
+        try {
+          await fs.writeFile(tmp, md, "utf8");
+          await fs.rename(tmp, dest);
+        } catch (e) {
+          try {
+            await fs.unlink(tmp);
+          } catch {
+            // ignore cleanup errors
+          }
+          throw e;
+        }
       }
       chunkRelPaths.push(chunkRelPosix);
     }

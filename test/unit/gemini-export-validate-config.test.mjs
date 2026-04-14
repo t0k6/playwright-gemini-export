@@ -230,6 +230,26 @@ describe("gemini-export validateConfig", () => {
     );
   });
 
+  it("throws when indexChunk.maxChunkBytes is 1..3 even if indexChunk.enabled is false", () => {
+    assert.throws(
+      () =>
+        validateConfig(
+          {
+            ...defaultConfig,
+            sourcePaths: ["src"],
+            outDir: ".ai-context/out",
+            indexChunk: {
+              ...defaultConfig.indexChunk,
+              enabled: false,
+              maxChunkBytes: 3
+            }
+          },
+          repoRoot
+        ),
+      /indexChunk\.maxChunkBytes must be an integer >= 4/
+    );
+  });
+
   it("throws when pack is an array", () => {
     assert.throws(
       () =>
