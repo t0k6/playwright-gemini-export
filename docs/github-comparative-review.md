@@ -4,9 +4,9 @@
 
 ## 1. 親Issueの作り方
 
-1. GitHubの**Issues** → **New issue** → **統合・2ブランチ比較レビュー**を選ぶ（[Issueテンプレート](../.github/ISSUE_TEMPLATE/integration-compare-review.md)）。
+1. GitHubの**Issues** → **New issue** → 空のIssueを作成する（可能なら本文を記載する）
 2. `REPLACE_BRANCH_A` / `REPLACE_BRANCH_B`を実ブランチ名に置換する（例: `feature/pseudo-rag-approach/gpt`と`feature/pseudo-rag-approach/opus`はスラッシュをURLエンコードする場合あり）。
-3. PRがまだなら開き、本文に[比較レビュー用PRテンプレート](../.github/PULL_REQUEST_TEMPLATE/comparative-review.md)を使う（新規PR作成時に`?template=comparative-review.md`を付与）。
+3. PRがまだなら開く。
 
 ### 比較用URLの組み立て
 
@@ -17,8 +17,6 @@ https://github.com/t0k6/playwright-gemini-export/compare/BASE...BRANCH_A
 https://github.com/t0k6/playwright-gemini-export/compare/BASE...BRANCH_B
 https://github.com/t0k6/playwright-gemini-export/compare/BRANCH_A...BRANCH_B
 ```
-
-ローカルで一括出力する場合は[scripts/print-github-compare-urls.ps1](../scripts/print-github-compare-urls.ps1)を参照。
 
 ## 2. クロスレビュー依頼文（PRにコピー）
 
@@ -86,11 +84,3 @@ git rebase origin/main   # またはmerge。方針に合わせる
 ### 避けたいこと
 
 採用理由を残さないまま大きなsquashのみで片方の文脈を消すこと。親Issueの「決定ログ」に、何をどちらから採用したかを残すことを推奨する。
-
-## 5. 関連ファイル
-
-| 用途 | パス |
-| --- | --- |
-| 親Issueテンプレ | [.github/ISSUE_TEMPLATE/integration-compare-review.md](../.github/ISSUE_TEMPLATE/integration-compare-review.md) |
-| PRチェックリスト | [.github/PULL_REQUEST_TEMPLATE/comparative-review.md](../.github/PULL_REQUEST_TEMPLATE/comparative-review.md) |
-| 比較用URLの出力 | [scripts/print-github-compare-urls.ps1](../scripts/print-github-compare-urls.ps1) |
