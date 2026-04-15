@@ -12,7 +12,3 @@ node_modules/
 
 # playwright project
 playwright/
-
-# Trial / integration debug NDJSON (GEMINI_EXPORT_TRIAL_DEBUG=1)
-debug-trial-export-cli.ndjson
-debug-trial-export-cli.*.ndjson
