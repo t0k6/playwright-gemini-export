@@ -26,7 +26,7 @@ import { resolveWithinRepo } from "./repo-path.mjs";
  * ヘルプを標準出力に表示する。
  */
 export function printHelp() {
-  console.log(`playwright-gemini-export
+  console.log(`playwright-export-gemini
 
 Usage:
   node ./tools/export-gemini-playwright-context.mjs [--check] [--pack] [--index-chunk]

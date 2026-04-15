@@ -99,7 +99,7 @@ export async function writePackIndex(opts) {
 
   const projectIndexMd = `# PROJECT_INDEX
 
-このファイルは \`playwright-gemini-export\` の \`--pack\` が生成した索引です。Gemini / NotebookLM ではまず本ファイルと \`DIRECTORY_TREE.md\` を渡し、必要に応じて \`bundles/\` または \`chunks/\` を追加してください。
+このファイルは \`playwright-export-gemini\` の \`--pack\` が生成した索引です。Gemini / NotebookLM ではまず本ファイルと \`DIRECTORY_TREE.md\` を渡し、必要に応じて \`bundles/\` または \`chunks/\` を追加してください。
 
 ## ファイル一覧
 

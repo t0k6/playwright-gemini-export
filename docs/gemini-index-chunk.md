@@ -51,7 +51,7 @@ kind: spec
 
 ## dry-run
 
-`npm run export:gemini:pw:check -- --index-chunk`のように`--check`と併用すると、ディスクへは書かず、標準出力に概算件数を出す。
+`npm run export:gemini:check -- --index-chunk`のように`--check`と併用すると、ディスクへは書かず、標準出力に概算件数を出す。
 
 ## 実装の要点
 

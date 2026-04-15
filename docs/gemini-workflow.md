@@ -1,6 +1,6 @@
 # Gemini / NotebookLM 運用ガイド（index・chunk・bundle）
 
-このドキュメントは、`playwright-gemini-export` の **Pack** 機能（`--pack`）で生成する成果物の意味と、Gemini チャットおよび NotebookLM での実運用をまとめたものです。
+このドキュメントは、`playwright-export-gemini` の **Pack** 機能（`--pack`）で生成する成果物の意味と、Gemini チャットおよび NotebookLM での実運用をまとめたものです。
 
 ## なぜ index / chunk / bundle が必要か
 
