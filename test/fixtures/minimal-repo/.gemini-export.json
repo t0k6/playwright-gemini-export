@@ -1,0 +1,13 @@
+{
+  "sourcePaths": ["src"],
+  "outDir": ".ai-context/playwright-test-export",
+  "generateAiReadme": false,
+  "failOnWarnings": false,
+  "anonymize": {
+    "enabled": true,
+    "salt": "integration-test-salt",
+    "fixtureSandboxOnly": true,
+    "includeExtensions": [".json"],
+    "keys": ["email"]
+  }
+}

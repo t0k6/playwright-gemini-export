@@ -38,19 +38,27 @@ function runExport(cwd, args = []) {
   });
 }
 
-async function copyFixture(dest) {
-  await fs.cp(fixtureSource, dest, { recursive: true });
+/**
+ * `fs.cp(ディレクトリ, 既存ディレクトリ)` は basename でネストする（例: tmp/minimal-repo/）。
+ * 未存在の子へコピーし、CLI の cwd と一致させる。
+ * @param {string} destParent mkdtemp の空ディレクトリ
+ * @returns {Promise<string>} 偽リポジトリルート
+ */
+async function copyFixture(destParent) {
+  const repoRoot = path.join(destParent, "fixture");
+  await fs.cp(fixtureSource, repoRoot, { recursive: true });
+  return repoRoot;
 }
 
 describe("export-gemini-playwright-context CLI", () => {
   it("exports with redaction and JSON anonymization under fixtures/sandbox", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
     try {
-      await copyFixture(tmp);
-      const { code, stderr } = await runExport(tmp);
+      const repo = await copyFixture(tmp);
+      const { code, stderr } = await runExport(repo);
       assert.equal(code, 0, stderr);
 
-      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      const outRoot = path.join(repo, ".ai-context", "playwright-test-export");
       const sampleOut = path.join(outRoot, "src", "sample.ts");
       const sampleText = await fs.readFile(sampleOut, "utf8");
       assert.match(sampleText, /\*\*\*REDACTED\*\*\*/);
@@ -83,16 +91,16 @@ describe("export-gemini-playwright-context CLI", () => {
   it("generates PROJECT_INDEX, PATH_INDEX, and chunks when indexChunk is enabled", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
     try {
-      await copyFixture(tmp);
-      const cfgPath = path.join(tmp, ".gemini-export.json");
+      const repo = await copyFixture(tmp);
+      const cfgPath = path.join(repo, ".gemini-export.json");
       const cfg = JSON.parse(await fs.readFile(cfgPath, "utf8"));
       cfg.indexChunk = { enabled: true, maxChunkBytes: 2048 };
       await fs.writeFile(cfgPath, JSON.stringify(cfg), "utf8");
 
-      const { code, stderr } = await runExport(tmp);
+      const { code, stderr } = await runExport(repo);
       assert.equal(code, 0, stderr);
 
-      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      const outRoot = path.join(repo, ".ai-context", "playwright-test-export");
       await fs.access(path.join(outRoot, "PROJECT_INDEX.md"));
       await fs.access(path.join(outRoot, "PATH_INDEX.jsonl"));
       const chunkDir = path.join(outRoot, "chunks");
@@ -106,12 +114,12 @@ describe("export-gemini-playwright-context CLI", () => {
   it("exits non-zero when indexChunk is an array (CLI guard before merge)", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
     try {
-      await copyFixture(tmp);
-      const cfgPath = path.join(tmp, ".gemini-export.json");
+      const repo = await copyFixture(tmp);
+      const cfgPath = path.join(repo, ".gemini-export.json");
       const cfg = JSON.parse(await fs.readFile(cfgPath, "utf8"));
       cfg.indexChunk = [];
       await fs.writeFile(cfgPath, JSON.stringify(cfg), "utf8");
-      const { code, stderr } = await runExport(tmp);
+      const { code, stderr } = await runExport(repo);
       assert.notEqual(code, 0, stderr);
       assert.match(stderr + "", /indexChunk must be a non-null object/);
     } finally {
@@ -122,17 +130,17 @@ describe("export-gemini-playwright-context CLI", () => {
   it("manifest.json and README_FOR_AI reflect indexChunk; PATH_INDEX and chunks have required metadata", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
     try {
-      await copyFixture(tmp);
-      const cfgPath = path.join(tmp, ".gemini-export.json");
+      const repo = await copyFixture(tmp);
+      const cfgPath = path.join(repo, ".gemini-export.json");
       const cfg = JSON.parse(await fs.readFile(cfgPath, "utf8"));
       cfg.indexChunk = { enabled: true, maxChunkBytes: 2048 };
       cfg.generateAiReadme = true;
       await fs.writeFile(cfgPath, JSON.stringify(cfg), "utf8");
 
-      const { code, stderr } = await runExport(tmp);
+      const { code, stderr } = await runExport(repo);
       assert.equal(code, 0, stderr);
 
-      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      const outRoot = path.join(repo, ".ai-context", "playwright-test-export");
       const man = JSON.parse(await fs.readFile(path.join(outRoot, "manifest.json"), "utf8"));
       assert.ok(Array.isArray(man.indexFiles));
       assert.ok(man.indexFiles.includes("PROJECT_INDEX.md"));
@@ -171,10 +179,10 @@ describe("export-gemini-playwright-context CLI", () => {
   it("--check does not create outDir", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
     try {
-      await copyFixture(tmp);
-      const { code, stderr } = await runExport(tmp, ["--check"]);
+      const repo = await copyFixture(tmp);
+      const { code, stderr } = await runExport(repo, ["--check"]);
       assert.equal(code, 0, stderr);
-      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      const outRoot = path.join(repo, ".ai-context", "playwright-test-export");
       await assert.rejects(() => fs.access(outRoot), { code: "ENOENT" });
     } finally {
       await fs.rm(tmp, { recursive: true, force: true });
@@ -184,11 +192,11 @@ describe("export-gemini-playwright-context CLI", () => {
   it("--index-chunk forces index/chunk when fixture has indexChunk.enabled false", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
     try {
-      await copyFixture(tmp);
-      const { code, stderr } = await runExport(tmp, ["--index-chunk"]);
+      const repo = await copyFixture(tmp);
+      const { code, stderr } = await runExport(repo, ["--index-chunk"]);
       assert.equal(code, 0, stderr);
 
-      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      const outRoot = path.join(repo, ".ai-context", "playwright-test-export");
       await fs.access(path.join(outRoot, "PROJECT_INDEX.md"));
       await fs.access(path.join(outRoot, "PATH_INDEX.jsonl"));
       const chunkDir = path.join(outRoot, "chunks");
@@ -202,12 +210,12 @@ describe("export-gemini-playwright-context CLI", () => {
   it("--check --index-chunk prints dry-run estimate without writing outDir", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
     try {
-      await copyFixture(tmp);
-      const { code, stdout, stderr } = await runExport(tmp, ["--check", "--index-chunk"]);
+      const repo = await copyFixture(tmp);
+      const { code, stdout, stderr } = await runExport(repo, ["--check", "--index-chunk"]);
       assert.equal(code, 0, stderr);
       assert.match(stdout, /Index\/chunk \(dry-run\)/);
 
-      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      const outRoot = path.join(repo, ".ai-context", "playwright-test-export");
       await assert.rejects(() => fs.access(outRoot), { code: "ENOENT" });
     } finally {
       await fs.rm(tmp, { recursive: true, force: true });
@@ -217,15 +225,15 @@ describe("export-gemini-playwright-context CLI", () => {
   it("--check does not create outDir when indexChunk is enabled", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
     try {
-      await copyFixture(tmp);
-      const cfgPath = path.join(tmp, ".gemini-export.json");
+      const repo = await copyFixture(tmp);
+      const cfgPath = path.join(repo, ".gemini-export.json");
       const cfg = JSON.parse(await fs.readFile(cfgPath, "utf8"));
       cfg.indexChunk = { enabled: true };
       await fs.writeFile(cfgPath, JSON.stringify(cfg), "utf8");
 
-      const { code, stderr } = await runExport(tmp, ["--check"]);
+      const { code, stderr } = await runExport(repo, ["--check"]);
       assert.equal(code, 0, stderr);
-      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      const outRoot = path.join(repo, ".ai-context", "playwright-test-export");
       await assert.rejects(() => fs.access(outRoot), { code: "ENOENT" });
     } finally {
       await fs.rm(tmp, { recursive: true, force: true });
@@ -235,16 +243,16 @@ describe("export-gemini-playwright-context CLI", () => {
   it("exits non-zero when sourcePaths contains parent escape", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
     try {
-      await copyFixture(tmp);
+      const repo = await copyFixture(tmp);
       await fs.writeFile(
-        path.join(tmp, ".gemini-export.json"),
+        path.join(repo, ".gemini-export.json"),
         JSON.stringify({
           sourcePaths: ["../outside"],
           outDir: ".ai-context/playwright-test-export"
         }),
         "utf8"
       );
-      const { code, stderr } = await runExport(tmp);
+      const { code, stderr } = await runExport(repo);
       assert.notEqual(code, 0);
       assert.match(stderr, /not allowed|Error/i);
     } finally {
@@ -255,8 +263,8 @@ describe("export-gemini-playwright-context CLI", () => {
   it("--help exits 0 and prints usage", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
     try {
-      await copyFixture(tmp);
-      const { code, stdout } = await runExport(tmp, ["--help"]);
+      const repo = await copyFixture(tmp);
+      const { code, stdout } = await runExport(repo, ["--help"]);
       assert.equal(code, 0);
       assert.match(stdout, /Usage:|--check/i);
     } finally {
@@ -267,16 +275,16 @@ describe("export-gemini-playwright-context CLI", () => {
   it("exits non-zero when sourcePaths is empty", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
     try {
-      await copyFixture(tmp);
+      const repo = await copyFixture(tmp);
       await fs.writeFile(
-        path.join(tmp, ".gemini-export.json"),
+        path.join(repo, ".gemini-export.json"),
         JSON.stringify({
           sourcePaths: [],
           outDir: ".ai-context/playwright-test-export"
         }),
         "utf8"
       );
-      const { code, stderr } = await runExport(tmp);
+      const { code, stderr } = await runExport(repo);
       assert.notEqual(code, 0);
       assert.match(stderr, /sourcePaths|Error/i);
     } finally {
@@ -287,16 +295,16 @@ describe("export-gemini-playwright-context CLI", () => {
   it("exits non-zero when outDir is empty string", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
     try {
-      await copyFixture(tmp);
+      const repo = await copyFixture(tmp);
       await fs.writeFile(
-        path.join(tmp, ".gemini-export.json"),
+        path.join(repo, ".gemini-export.json"),
         JSON.stringify({
           sourcePaths: ["src"],
           outDir: ""
         }),
         "utf8"
       );
-      const { code, stderr } = await runExport(tmp);
+      const { code, stderr } = await runExport(repo);
       assert.notEqual(code, 0);
       assert.match(stderr, /outDir|Error/i);
     } finally {
@@ -307,11 +315,11 @@ describe("export-gemini-playwright-context CLI", () => {
   it("exports with --pack creates _pack artifacts", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
     try {
-      await copyFixture(tmp);
-      const { code, stderr } = await runExport(tmp, ["--pack"]);
+      const repo = await copyFixture(tmp);
+      const { code, stderr } = await runExport(repo, ["--pack"]);
       assert.equal(code, 0, stderr);
 
-      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      const outRoot = path.join(repo, ".ai-context", "playwright-test-export");
       const packRoot = path.join(outRoot, "_pack");
       await fs.access(path.join(packRoot, "PROJECT_INDEX.md"));
       await fs.access(path.join(packRoot, "DIRECTORY_TREE.md"));
@@ -328,11 +336,11 @@ describe("export-gemini-playwright-context CLI", () => {
   it("--check --pack prints dry-run summary without _pack dir", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
     try {
-      await copyFixture(tmp);
-      const { code, stdout, stderr } = await runExport(tmp, ["--check", "--pack"]);
+      const repo = await copyFixture(tmp);
+      const { code, stdout, stderr } = await runExport(repo, ["--check", "--pack"]);
       assert.equal(code, 0, stderr);
       assert.match(stdout, /Pack \(dry-run\)/);
-      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      const outRoot = path.join(repo, ".ai-context", "playwright-test-export");
       await assert.rejects(() => fs.access(path.join(outRoot, "_pack")), { code: "ENOENT" });
     } finally {
       await fs.rm(tmp, { recursive: true, force: true });
@@ -342,16 +350,16 @@ describe("export-gemini-playwright-context CLI", () => {
   it("--pack with generateAiReadme documents _pack in README_FOR_AI", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
     try {
-      await copyFixture(tmp);
-      const cfgPath = path.join(tmp, ".gemini-export.json");
+      const repo = await copyFixture(tmp);
+      const cfgPath = path.join(repo, ".gemini-export.json");
       const cfg = JSON.parse(await fs.readFile(cfgPath, "utf8"));
       cfg.generateAiReadme = true;
       await fs.writeFile(cfgPath, JSON.stringify(cfg), "utf8");
 
-      const { code, stderr } = await runExport(tmp, ["--pack"]);
+      const { code, stderr } = await runExport(repo, ["--pack"]);
       assert.equal(code, 0, stderr);
 
-      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      const outRoot = path.join(repo, ".ai-context", "playwright-test-export");
       const readme = await fs.readFile(path.join(outRoot, "README_FOR_AI.md"), "utf8");
       assert.match(readme, /Pack output/);
       assert.match(readme, /`_pack\/PROJECT_INDEX\.md`/);
@@ -366,17 +374,17 @@ describe("export-gemini-playwright-context CLI", () => {
   it("does not duplicate copiedFiles when sourcePaths and includeFiles both list package.json", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
     try {
-      await copyFixture(tmp);
-      await fs.writeFile(path.join(tmp, "package.json"), JSON.stringify({ name: "dup-test" }), "utf8");
-      const cfgPath = path.join(tmp, ".gemini-export.json");
+      const repo = await copyFixture(tmp);
+      await fs.writeFile(path.join(repo, "package.json"), JSON.stringify({ name: "dup-test" }), "utf8");
+      const cfgPath = path.join(repo, ".gemini-export.json");
       const cfg = JSON.parse(await fs.readFile(cfgPath, "utf8"));
       cfg.sourcePaths = ["src", "package.json"];
       await fs.writeFile(cfgPath, JSON.stringify(cfg), "utf8");
 
-      const { code, stderr } = await runExport(tmp, ["--pack"]);
+      const { code, stderr } = await runExport(repo, ["--pack"]);
       assert.equal(code, 0, stderr);
 
-      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
+      const outRoot = path.join(repo, ".ai-context", "playwright-test-export");
       const man = JSON.parse(await fs.readFile(path.join(outRoot, "manifest.json"), "utf8"));
       const pkgEntries = man.copiedFiles.filter((p) => p === "package.json");
       assert.equal(pkgEntries.length, 1, `expected single package.json, got: ${JSON.stringify(pkgEntries)}`);
@@ -401,14 +409,14 @@ describe("export-gemini-playwright-context CLI", () => {
   it("PROJECT_INDEX shows omission note when file list exceeds cap", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-many-"));
     try {
-      await copyFixture(tmp);
-      const cfgPath = path.join(tmp, ".gemini-export.json");
+      const repo = await copyFixture(tmp);
+      const cfgPath = path.join(repo, ".gemini-export.json");
       const cfg = JSON.parse(await fs.readFile(cfgPath, "utf8"));
       cfg.indexChunk = { enabled: true, maxChunkBytes: 2048 };
       await fs.writeFile(cfgPath, JSON.stringify(cfg), "utf8");
 
-      const outRoot = path.join(tmp, ".ai-context", "playwright-test-export");
-      const { code: code0, stderr: stderr0 } = await runExport(tmp);
+      const outRoot = path.join(repo, ".ai-context", "playwright-test-export");
+      const { code: code0, stderr: stderr0 } = await runExport(repo);
       assert.equal(code0, 0, stderr0);
       const jsonl0 = await fs.readFile(path.join(outRoot, "PATH_INDEX.jsonl"), "utf8");
       const baselineIndexedFiles = jsonl0
@@ -417,7 +425,7 @@ describe("export-gemini-playwright-context CLI", () => {
         .filter((line) => line.length > 0).length;
       await fs.rm(outRoot, { recursive: true, force: true });
 
-      const srcDir = path.join(tmp, "src");
+      const srcDir = path.join(repo, "src");
       await fs.mkdir(srcDir, { recursive: true });
       const maxListedFiles = PROJECT_INDEX_MAX_LINES - PROJECT_INDEX_HEADER_LINE_COUNT;
       const filesToCreate = Math.max(1, maxListedFiles - baselineIndexedFiles + 1);
@@ -425,7 +433,7 @@ describe("export-gemini-playwright-context CLI", () => {
         await fs.writeFile(path.join(srcDir, `bulk-${i}.ts`), `export const v${i} = ${i};\n`, "utf8");
       }
 
-      const { code, stderr } = await runExport(tmp);
+      const { code, stderr } = await runExport(repo);
       assert.equal(code, 0, stderr);
 
       const projectIndex = await fs.readFile(path.join(outRoot, "PROJECT_INDEX.md"), "utf8");
@@ -438,17 +446,17 @@ describe("export-gemini-playwright-context CLI", () => {
   it("exits with code 2 when failOnWarnings is true", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-export-"));
     try {
-      await copyFixture(tmp);
+      const repo = await copyFixture(tmp);
       const cfg = JSON.parse(
-        await fs.readFile(path.join(tmp, ".gemini-export.json"), "utf8")
+        await fs.readFile(path.join(repo, ".gemini-export.json"), "utf8")
       );
       cfg.failOnWarnings = true;
       await fs.writeFile(
-        path.join(tmp, ".gemini-export.json"),
+        path.join(repo, ".gemini-export.json"),
         JSON.stringify(cfg),
         "utf8"
       );
-      const { code, stderr } = await runExport(tmp);
+      const { code, stderr } = await runExport(repo);
       assert.equal(code, 2, stderr);
     } finally {
       await fs.rm(tmp, { recursive: true, force: true });
