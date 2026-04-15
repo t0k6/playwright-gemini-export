@@ -18,13 +18,35 @@ import { deepMerge } from "../lib/gemini-export-pure.mjs";
 export { deepMerge };
 
 /**
+ * 試行デバッグ用: 親が `GEMINI_EXPORT_DEBUG_LOG_FILE` に絶対パスを渡したときだけ NDJSON 1行追記（値は書かない）。
+ * @param {Record<string, unknown>} payload
+ */
+async function appendEnvDebugNdjson(payload) {
+  const p = process.env.GEMINI_EXPORT_DEBUG_LOG_FILE;
+  if (typeof p !== "string" || p.length === 0) return;
+  const line = JSON.stringify({ ts: Date.now(), ...payload });
+  try {
+    await fs.appendFile(p, `${line}\n`, "utf8");
+  } catch {
+    // ignore
+  }
+}
+
+/**
  * リポジトリルートの設定を読み、既定とマージする。
  * @param {string} repoRoot
  * @returns {Promise<{ config: typeof defaultConfig, warnings: string[] }>}
  */
 export async function loadConfig(repoRoot) {
   const configPath = path.join(repoRoot, CONFIG_BASENAME);
-  if (!(await exists(configPath))) return { config: defaultConfig, warnings: [] };
+  const existsCfg = await exists(configPath);
+  await appendEnvDebugNdjson({
+    where: "loadConfig:probe",
+    repoRoot,
+    configPath,
+    existsCfg
+  });
+  if (!existsCfg) return { config: defaultConfig, warnings: [] };
   const raw = await fs.readFile(configPath, "utf8");
   const userConfig = JSON.parse(raw);
 
@@ -48,7 +70,13 @@ export async function loadConfig(repoRoot) {
     }
   }
 
-  return { config: deepMerge(defaultConfig, userConfig), warnings };
+  const merged = deepMerge(defaultConfig, userConfig);
+  await appendEnvDebugNdjson({
+    where: "loadConfig:merged",
+    userConfigTopKeys: Object.keys(userConfig),
+    mergedSourcePathsLen: Array.isArray(merged.sourcePaths) ? merged.sourcePaths.length : null
+  });
+  return { config: merged, warnings };
 }
 
 /**

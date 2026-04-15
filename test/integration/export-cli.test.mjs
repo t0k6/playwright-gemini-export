@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, it } from "node:test";
+import { before, describe, it } from "node:test";
 import {
   PROJECT_INDEX_HEADER_LINE_COUNT,
   PROJECT_INDEX_MAX_LINES
@@ -16,12 +16,38 @@ const projectRoot = path.resolve(__dirname, "..", "..");
 const scriptPath = path.join(projectRoot, "tools", "export-gemini-playwright-context.mjs");
 const fixtureSource = path.join(projectRoot, "test", "fixtures", "minimal-repo");
 
+/** 試行環境向け: `GEMINI_EXPORT_TRIAL_DEBUG=1` で `debug-trial-export-cli.ndjson` に NDJSON 追記（Cursor 不要）。 */
+const TRIAL_DEBUG = process.env.GEMINI_EXPORT_TRIAL_DEBUG === "1";
+const TRIAL_LOG_PATH = path.join(projectRoot, "debug-trial-export-cli.ndjson");
+
+async function trialDebugLine(payload) {
+  if (!TRIAL_DEBUG) return;
+  const line = JSON.stringify({ ts: Date.now(), ...payload });
+  try {
+    await fs.appendFile(TRIAL_LOG_PATH, `${line}\n`, "utf8");
+  } catch {
+    // ignore
+  }
+}
+
+before(async () => {
+  if (!TRIAL_DEBUG) return;
+  try {
+    await fs.writeFile(TRIAL_LOG_PATH, "", "utf8");
+  } catch {
+    // ignore
+  }
+});
+
 function runExport(cwd, args = []) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [scriptPath, ...args], {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env }
+      env: {
+        ...process.env,
+        ...(TRIAL_DEBUG ? { GEMINI_EXPORT_DEBUG_LOG_FILE: TRIAL_LOG_PATH } : {})
+      }
     });
     let stdout = "";
     let stderr = "";
@@ -33,6 +59,14 @@ function runExport(cwd, args = []) {
     });
     child.on("error", reject);
     child.on("close", (code) => {
+      void trialDebugLine({
+        where: "runExport:close",
+        cwd,
+        args,
+        code,
+        stderrChars: stderr.length,
+        stderrTail: stderr.slice(-2000)
+      });
       resolve({ code, stdout, stderr });
     });
   });
@@ -47,6 +81,35 @@ function runExport(cwd, args = []) {
 async function copyFixture(destParent) {
   const repoRoot = path.join(destParent, "fixture");
   await fs.cp(fixtureSource, repoRoot, { recursive: true });
+  if (TRIAL_DEBUG) {
+    try {
+      const names = (await fs.readdir(repoRoot, { withFileTypes: true }))
+        .map((e) => `${e.isDirectory() ? "d" : "f"}:${e.name}`)
+        .slice(0, 80);
+      const cfgAtRepo = await fs
+        .access(path.join(repoRoot, ".gemini-export.json"))
+        .then(() => true)
+        .catch(() => false);
+      const cfgNestedWrong = await fs
+        .access(path.join(destParent, path.basename(fixtureSource), ".gemini-export.json"))
+        .then(() => true)
+        .catch(() => false);
+      await trialDebugLine({
+        where: "copyFixture:afterCp",
+        destParent,
+        repoRoot,
+        names,
+        cfgAtRepo,
+        cfgNestedWrong
+      });
+    } catch (e) {
+      await trialDebugLine({
+        where: "copyFixture:afterCp:error",
+        destParent,
+        err: String(e?.message ?? e)
+      });
+    }
+  }
   return repoRoot;
 }
 
