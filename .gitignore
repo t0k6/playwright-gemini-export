@@ -9,3 +9,6 @@ node_modules/
 
 # Local user config (commit only the example)
 .gemini-export.json
+
+# playwright project
+playwright/
