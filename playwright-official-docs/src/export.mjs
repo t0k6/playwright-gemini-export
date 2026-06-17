@@ -8,6 +8,7 @@ import path from "node:path";
 import {
   buildCategoryBundle,
   buildProjectIndex,
+  bundleFileName,
   groupPagesByCategory,
   orderPaddingWidth,
   pageFileName
@@ -15,7 +16,7 @@ import {
 import { buildMdxCatalog, loadMdx, loadSidebar } from "./fetch.mjs";
 import { ensureDir, writeAtomically } from "./fs-utils.mjs";
 import { preprocessMdx } from "./preprocess.mjs";
-import { categoryToSlug, extractDocsPages } from "./sidebar.mjs";
+import { extractDocsPages } from "./sidebar.mjs";
 import {
   buildOfficialUrlListMarkdown,
   buildUrlReviewMarkdown,
@@ -107,7 +108,7 @@ export async function runExport(config, options) {
 
     const grouped = groupPagesByCategory(processedPages);
     for (const [category, categoryPages] of grouped) {
-      const bundleName = `${categoryToSlug(category)}.md`;
+      const bundleName = bundleFileName(category);
       const bundle = buildCategoryBundle(category, categoryPages);
       await fs.writeFile(path.join(notebookDir, bundleName), bundle, "utf8");
     }

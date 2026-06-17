@@ -53,6 +53,7 @@ export async function writeAtomically(outDir, writer) {
   await ensureDir(tmpDir);
 
   let movedOutToBackup = false;
+  let promoted = false;
 
   try {
     await writer(tmpDir);
@@ -64,14 +65,26 @@ export async function writeAtomically(outDir, writer) {
     }
 
     await fs.rename(tmpDir, outDir);
+    promoted = true;
     movedOutToBackup = false;
-    await cleanDir(backupDir);
+
+    try {
+      await cleanDir(backupDir);
+    } catch {
+      // バックアップ削除失敗は成功済みエクスポートを失敗扱いにしない
+    }
   } catch (err) {
     if (movedOutToBackup && !(await exists(outDir)) && (await exists(backupDir))) {
       await fs.rename(backupDir, outDir);
     }
-    await cleanDir(tmpDir);
-    await cleanDir(backupDir);
+    if (!promoted) {
+      await cleanDir(tmpDir);
+    }
+    try {
+      await cleanDir(backupDir);
+    } catch {
+      // 復元後のバックアップ掃除失敗は元エラーを優先する
+    }
     throw err;
   }
 }

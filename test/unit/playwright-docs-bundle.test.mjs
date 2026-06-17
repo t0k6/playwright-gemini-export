@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   buildCategoryBundle,
+  bundleFileName,
   formatOrder,
   orderPaddingWidth,
   pageFileName
@@ -18,6 +19,12 @@ describe("playwright-docs bundle", () => {
     assert.equal(orderPaddingWidth(100), 3);
     assert.equal(formatOrder(100, 3), "100");
     assert.equal(pageFileName({ order: 10, id: "intro" }, 3), "010-intro.md");
+  });
+
+  it("builds safe bundle file names", () => {
+    assert.equal(bundleFileName("Getting Started"), "getting-started.md");
+    assert.equal(bundleFileName("../../evil"), "evil.md");
+    assert.doesNotMatch(bundleFileName("../../evil"), /\.\./);
   });
 
   it("builds category bundle with page separators", () => {

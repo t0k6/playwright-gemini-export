@@ -31,6 +31,7 @@ describe("playwright-docs sidebar", () => {
     assert.equal(categoryToSlug("Getting Started"), "getting-started");
     assert.equal(categoryToSlug("Playwright Test"), "playwright-test");
     assert.equal(categoryToSlug("Guides"), "guides");
+    assert.equal(categoryToSlug("../../escape"), "escape");
   });
 
   it("rejects invalid doc ids from sidebar", () => {

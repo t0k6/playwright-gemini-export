@@ -16,7 +16,12 @@ export function categoryToSlug(category) {
     Integrations: "integrations",
     Other: "other"
   };
-  return map[category] ?? category.toLowerCase().replace(/\s+/g, "-");
+  const raw = map[category] ?? category.toLowerCase().replace(/\s+/g, "-");
+  const safe = raw
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return safe.length > 0 ? safe : "other";
 }
 
 /**

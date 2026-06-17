@@ -45,6 +45,41 @@ describe("playwright-docs fs-utils", () => {
       await cleanDir(root);
     }
   });
+
+  it("keeps export when backup cleanup fails after promotion", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "pw-docs-fs-"));
+    const outDir = path.join(root, "output");
+
+    try {
+      await fs.mkdir(outDir, { recursive: true });
+      await fs.writeFile(path.join(outDir, "keep.txt"), "previous-export", "utf8");
+
+      const originalRm = fs.rm.bind(fs);
+      let backupRmCalls = 0;
+      fs.rm = async (target, options) => {
+        const normalized = String(target).replace(/\\/g, "/");
+        if (normalized.includes(".bak-") && options?.recursive) {
+          backupRmCalls += 1;
+          if (backupRmCalls >= 2) {
+            throw new Error("simulated backup cleanup failure");
+          }
+        }
+        return originalRm(target, options);
+      };
+
+      try {
+        await writeAtomically(outDir, async (tmpDir) => {
+          await fs.writeFile(path.join(tmpDir, "new.txt"), "new-export", "utf8");
+        });
+      } finally {
+        fs.rm = originalRm;
+      }
+
+      assert.equal(await fs.readFile(path.join(outDir, "new.txt"), "utf8"), "new-export");
+    } finally {
+      await cleanDir(root);
+    }
+  });
 });
 
 describe("playwright-docs preprocess jsx cleanup", () => {

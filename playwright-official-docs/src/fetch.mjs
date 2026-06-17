@@ -11,6 +11,19 @@ import { parseFrontmatter } from "./preprocess.mjs";
  * @typedef {{ catalog: Map<string, string>, contentByStem: Map<string, string> }} MdxIndex
  */
 
+const TRUSTED_FETCH_HOSTS = new Set(["raw.githubusercontent.com", "api.github.com"]);
+
+/**
+ * 取得 URL が許可ホストか検証する。
+ * @param {string} url
+ */
+function assertTrustedDownloadUrl(url) {
+  const parsed = new URL(url);
+  if (parsed.protocol !== "https:" || !TRUSTED_FETCH_HOSTS.has(parsed.hostname)) {
+    throw new Error(`Untrusted download URL: ${url}`);
+  }
+}
+
 /**
  * HTTPテキストを取得する。
  * @param {string} url
@@ -37,6 +50,7 @@ export async function loadSidebar(config) {
     const raw = await fs.readFile(file, "utf8");
     return JSON.parse(raw);
   }
+  assertTrustedDownloadUrl(String(config.sidebarUrl));
   const text = await fetchText(String(config.sidebarUrl));
   return JSON.parse(text);
 }
@@ -100,6 +114,7 @@ export async function buildMdxCatalog(config) {
       continue;
     }
     const stem = entry.name.replace(/\.mdx$/, "");
+    assertTrustedDownloadUrl(entry.download_url);
     const content = await fetchText(entry.download_url);
     const { meta } = parseFrontmatter(content);
     registerMdxEntry(index, meta.id ?? stem, stem, content);
@@ -141,6 +156,7 @@ export async function loadMdx(config, id, index) {
     return { content, stem, rawUrl };
   }
 
+  assertTrustedDownloadUrl(rawUrl);
   const content = await fetchText(rawUrl);
   index.contentByStem.set(stem, content);
   return { content, stem, rawUrl };

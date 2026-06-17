@@ -34,6 +34,19 @@ export function pageFileName(page, orderWidth) {
 }
 
 /**
+ * bundle ファイル名を生成する。
+ * @param {string} category
+ * @returns {string}
+ */
+export function bundleFileName(category) {
+  const slug = categoryToSlug(category);
+  if (!/^[a-z0-9-]+$/.test(slug)) {
+    throw new Error(`Unsafe bundle slug: ${slug}`);
+  }
+  return `${slug}.md`;
+}
+
+/**
  * カテゴリ単位でbundle Markdownを生成する。
  * @param {string} category
  * @param {Array<{ order: number, id: string, title?: string, markdown: string }>} pages
