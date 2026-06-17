@@ -5,6 +5,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { resolveWithinRepo } from "../../tools/gemini-export/repo-path.mjs";
+import { isWithinBaseDir } from "../../tools/lib/gemini-export-pure.mjs";
 import { parseFrontmatter } from "./preprocess.mjs";
 
 /**
@@ -12,6 +14,45 @@ import { parseFrontmatter } from "./preprocess.mjs";
  */
 
 const TRUSTED_FETCH_HOSTS = new Set(["raw.githubusercontent.com", "api.github.com"]);
+const SAFE_MDX_STEM = /^[a-z0-9-]+$/;
+const SAFE_MDX_FILE = /^[a-z0-9-]+\.mdx$/;
+
+/**
+ * MDX stem が安全な形式か検証する。
+ * @param {string} stem
+ */
+export function assertSafeMdxStem(stem) {
+  if (!SAFE_MDX_STEM.test(stem)) {
+    throw new Error(`Invalid MDX stem: ${stem}`);
+  }
+}
+
+/**
+ * fixture の MDX を containment 検証付きで読み込む。
+ * @param {string} fixtureDir
+ * @param {string} stem
+ * @param {string} repoRoot
+ * @returns {Promise<string>}
+ */
+async function readFixtureMdx(fixtureDir, stem, repoRoot) {
+  assertSafeMdxStem(stem);
+  const mdxDir = path.join(fixtureDir, "mdx");
+  const candidate = path.join(mdxDir, `${stem}.mdx`);
+  const resolved = await resolveWithinRepo(candidate, repoRoot);
+  if (!resolved.ok) {
+    throw new Error(`Fixture MDX path not allowed: ${candidate} (${resolved.skipTag})`);
+  }
+  let realMdxDir;
+  try {
+    realMdxDir = await fs.realpath(mdxDir);
+  } catch {
+    throw new Error(`Fixture MDX directory not found: ${mdxDir}`);
+  }
+  if (!isWithinBaseDir(resolved.realPath, realMdxDir)) {
+    throw new Error(`Fixture MDX escapes mdx directory: ${stem}`);
+  }
+  return fs.readFile(resolved.realPath, "utf8");
+}
 
 /**
  * 取得 URL が許可ホストか検証する。
@@ -76,9 +117,10 @@ function registerMdxEntry(index, id, stem, content) {
 /**
  * MDX frontmatter の id からファイル名 stem への索引を構築する。
  * @param {Record<string, unknown>} config
+ * @param {string} [repoRoot]
  * @returns {Promise<MdxIndex>}
  */
-export async function buildMdxCatalog(config) {
+export async function buildMdxCatalog(config, repoRoot) {
   /** @type {MdxIndex} */
   const index = {
     catalog: new Map(),
@@ -86,11 +128,18 @@ export async function buildMdxCatalog(config) {
   };
 
   if (config.fixtureDir) {
-    const dir = path.join(String(config.fixtureDir), "mdx");
+    if (!repoRoot) {
+      throw new Error("repoRoot is required when using fixtureDir");
+    }
+    const fixtureDir = String(config.fixtureDir);
+    const dir = path.join(fixtureDir, "mdx");
     const files = await fs.readdir(dir);
-    for (const file of files.filter((name) => name.endsWith(".mdx"))) {
+    for (const file of files) {
+      if (!SAFE_MDX_FILE.test(file)) {
+        continue;
+      }
       const stem = file.replace(/\.mdx$/, "");
-      const content = await fs.readFile(path.join(dir, file), "utf8");
+      const content = await readFixtureMdx(fixtureDir, stem, repoRoot);
       const { meta } = parseFrontmatter(content);
       registerMdxEntry(index, meta.id ?? stem, stem, content);
     }
@@ -138,9 +187,10 @@ export function resolveMdxStem(catalog, id) {
  * @param {Record<string, unknown>} config
  * @param {string} id
  * @param {MdxIndex} index
+ * @param {string} [repoRoot]
  * @returns {Promise<{ content: string, stem: string, rawUrl: string }>}
  */
-export async function loadMdx(config, id, index) {
+export async function loadMdx(config, id, index, repoRoot) {
   const stem = resolveMdxStem(index.catalog, id);
   const rawUrl = `${config.mdxBaseUrl}/${stem}.mdx`;
 
@@ -150,8 +200,10 @@ export async function loadMdx(config, id, index) {
   }
 
   if (config.fixtureDir) {
-    const file = path.join(String(config.fixtureDir), "mdx", `${stem}.mdx`);
-    const content = await fs.readFile(file, "utf8");
+    if (!repoRoot) {
+      throw new Error("repoRoot is required when using fixtureDir");
+    }
+    const content = await readFixtureMdx(String(config.fixtureDir), stem, repoRoot);
     index.contentByStem.set(stem, content);
     return { content, stem, rawUrl };
   }

@@ -72,11 +72,11 @@ export async function runExport(config, options) {
 
   /** @type {Array<{ order: number, id: string, title: string, category: string, sourceUrl: string, rawUrl: string, markdown: string, stats: Record<string, number> }>} */
   const processedPages = [];
-  const mdxIndex = await buildMdxCatalog(config);
+  const mdxIndex = await buildMdxCatalog(config, repoRoot);
   const orderWidth = orderPaddingWidth(pages.length);
 
   for (const page of pages) {
-    const { content, rawUrl } = await loadMdx(config, page.id, mdxIndex);
+    const { content, rawUrl } = await loadMdx(config, page.id, mdxIndex, repoRoot);
     const pageWithRaw = { ...page, rawUrl };
     const { markdown, stats } = preprocessMdx(content, pageWithRaw, {
       packageManager: String(config.packageManager ?? "npm"),
