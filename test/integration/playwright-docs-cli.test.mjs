@@ -81,10 +81,12 @@ describe("export-playwright-docs CLI", () => {
   });
 
   it("is idempotent on repeated fixture export", async () => {
-    await runExport(projectRoot, ["--fixture-dir", fixtureDir]);
+    const firstRun = await runExport(projectRoot, ["--fixture-dir", fixtureDir]);
+    assert.equal(firstRun.code, 0, firstRun.stderr);
     const outDir = path.join(projectRoot, "playwright-official-docs", "output");
     const first = await fs.readFile(path.join(outDir, "pages", "01-intro.md"), "utf8");
-    await runExport(projectRoot, ["--fixture-dir", fixtureDir]);
+    const secondRun = await runExport(projectRoot, ["--fixture-dir", fixtureDir]);
+    assert.equal(secondRun.code, 0, secondRun.stderr);
     const second = await fs.readFile(path.join(outDir, "pages", "01-intro.md"), "utf8");
     assert.equal(first, second);
   });

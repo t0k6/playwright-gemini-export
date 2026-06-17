@@ -8,6 +8,8 @@ import { describe, it } from "node:test";
 import {
   assertSafeMdxStem,
   buildMdxCatalog,
+  fetchText,
+  loadSidebar,
   resolveMdxStem
 } from "../../playwright-official-docs/src/fetch.mjs";
 
@@ -55,6 +57,37 @@ describe("playwright-docs fetch", () => {
       assert.equal(index.catalog.has("secret"), false);
     } finally {
       await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("loads fixture sidebar with repo containment", async () => {
+    const sidebar = await loadSidebar({ fixtureDir }, repoRoot);
+    assert.ok(Array.isArray(sidebar.docs));
+  });
+
+  it("requires repoRoot when loading fixture sidebar", async () => {
+    await assert.rejects(() => loadSidebar({ fixtureDir }), /repoRoot is required/);
+  });
+
+  it("passes abort signal to fetch for timeout handling", async () => {
+    const originalFetch = globalThis.fetch;
+    /** @type {AbortSignal | undefined} */
+    let seenSignal;
+    globalThis.fetch = async (_url, init) => {
+      seenSignal = init?.signal;
+      return {
+        ok: true,
+        async text() {
+          return "ok";
+        }
+      };
+    };
+    try {
+      await fetchText("https://raw.githubusercontent.com/example/file.txt");
+      assert.ok(seenSignal);
+      assert.equal(typeof seenSignal.aborted, "boolean");
+    } finally {
+      globalThis.fetch = originalFetch;
     }
   });
 });

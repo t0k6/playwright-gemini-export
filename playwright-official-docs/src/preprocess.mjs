@@ -39,6 +39,42 @@ function isFenceBoundary(line) {
 }
 
 /**
+ * コードフェンス外のテキストだけ変換する。
+ * @param {string} body
+ * @param {(segment: string) => string} transform
+ * @returns {string}
+ */
+function transformOutsideFences(body, transform) {
+  const lines = body.split("\n");
+  let inFence = false;
+  /** @type {string[]} */
+  const out = [];
+  /** @type {string[]} */
+  let buffer = [];
+
+  const flushBuffer = () => {
+    if (buffer.length === 0) {
+      return;
+    }
+    const text = buffer.join("\n");
+    buffer = [];
+    out.push(inFence ? text : transform(text));
+  };
+
+  for (const line of lines) {
+    if (isFenceBoundary(line)) {
+      flushBuffer();
+      out.push(line);
+      inFence = !inFence;
+      continue;
+    }
+    buffer.push(line);
+  }
+  flushBuffer();
+  return out.join("\n");
+}
+
+/**
  * import行とDocusaurusコンポーネント行を削除する（コードフェンス内は保持）。
  * @param {string} body
  * @returns {{ body: string, removedImports: number }}
@@ -102,7 +138,7 @@ export function extractTabItems(tabsBlock) {
  * @param {{ packageManager?: string, languageTab?: string, tabMode?: string }} options
  * @returns {string}
  */
-export function selectTabContent(items, options) {
+export function selectTabContent(items, options = {}) {
   if (items.length === 0) {
     return "";
   }
@@ -136,7 +172,7 @@ export function selectTabContent(items, options) {
  * @param {{ packageManager?: string, languageTab?: string, tabMode?: string }} options
  * @returns {string}
  */
-export function expandTabs(body, options) {
+export function expandTabs(body, options = {}) {
   let result = body;
   const tabsPattern = /<Tabs[^>]*>([\s\S]*?)<\/Tabs>/g;
   let prev;
@@ -156,12 +192,14 @@ export function expandTabs(body, options) {
  * @returns {string}
  */
 export function removeJsxComponents(body) {
-  return body
-    .replace(/<[A-Z][A-Za-z0-9]*\b[^>]*\/>/g, "")
-    .replace(/<TabItem[^>]*\/>/g, "")
-    .replace(/<Tabs[^>]*\/>/g, "")
-    .replace(/<\/Tabs>/g, "")
-    .replace(/<\/TabItem>/g, "");
+  return transformOutsideFences(body, (segment) =>
+    segment
+      .replace(/<[A-Z][A-Za-z0-9]*\b[^>]*\/>/g, "")
+      .replace(/<TabItem[^>]*\/>/g, "")
+      .replace(/<Tabs[^>]*\/>/g, "")
+      .replace(/<\/Tabs>/g, "")
+      .replace(/<\/TabItem>/g, "")
+  );
 }
 
 /**
@@ -170,10 +208,12 @@ export function removeJsxComponents(body) {
  * @returns {string}
  */
 export function replaceImages(body) {
-  return body.replace(/!\[([^\]]*)\]\([^)]+\)/g, (_m, alt) => {
-    const text = alt?.trim();
-    return text ? `*(image: ${text})*` : "*(image)*";
-  });
+  return transformOutsideFences(body, (segment) =>
+    segment.replace(/!\[([^\]]*)\]\([^)]+\)/g, (_m, alt) => {
+      const text = alt?.trim();
+      return text ? `*(image: ${text})*` : "*(image)*";
+    })
+  );
 }
 
 /**
@@ -249,7 +289,7 @@ export function buildOutputFrontmatter(meta, page) {
  * @param {{ packageManager?: string, languageTab?: string, tabMode?: string }} options
  * @returns {{ markdown: string, stats: { removedImports: number, expandedTabs: number, removedApiRefs: number } }}
  */
-export function preprocessMdx(mdx, page, options) {
+export function preprocessMdx(mdx, page, options = {}) {
   const tabsCount = (mdx.match(/<Tabs/g) ?? []).length;
   const { meta, body } = parseFrontmatter(mdx);
   const { body: strippedBody, removedImports } = removeImportsAndComponentLines(body);

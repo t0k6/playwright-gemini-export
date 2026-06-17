@@ -16,6 +16,7 @@ import { parseFrontmatter } from "./preprocess.mjs";
 const TRUSTED_FETCH_HOSTS = new Set(["raw.githubusercontent.com", "api.github.com"]);
 const SAFE_MDX_STEM = /^[a-z0-9-]+$/;
 const SAFE_MDX_FILE = /^[a-z0-9-]+\.mdx$/;
+const FETCH_TIMEOUT_MS = 15_000;
 
 /**
  * MDX stem が安全な形式か検証する。
@@ -55,6 +56,54 @@ async function readFixtureMdx(fixtureDir, stem, repoRoot) {
 }
 
 /**
+ * fixture の sidebar.json を containment 検証付きで読み込む。
+ * @param {string} fixtureDir
+ * @param {string} repoRoot
+ * @returns {Promise<string>}
+ */
+async function readFixtureSidebar(fixtureDir, repoRoot) {
+  const candidate = path.join(fixtureDir, "sidebar.json");
+  const resolved = await resolveWithinRepo(candidate, repoRoot);
+  if (!resolved.ok) {
+    throw new Error(`Fixture sidebar path not allowed: ${candidate} (${resolved.skipTag})`);
+  }
+  let realFixtureDir;
+  try {
+    realFixtureDir = await fs.realpath(fixtureDir);
+  } catch {
+    throw new Error(`Fixture directory not found: ${fixtureDir}`);
+  }
+  if (!isWithinBaseDir(resolved.realPath, realFixtureDir)) {
+    throw new Error(`Fixture sidebar escapes fixture directory: ${candidate}`);
+  }
+  return fs.readFile(resolved.realPath, "utf8");
+}
+
+/**
+ * timeout 付き fetch を実行する。
+ * @param {string} url
+ * @param {RequestInit} [init]
+ * @returns {Promise<Response>}
+ */
+async function fetchWithTimeout(url, init = {}) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(`Request timed out after ${FETCH_TIMEOUT_MS}ms: ${url}`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
  * 取得 URL が許可ホストか検証する。
  * @param {string} url
  */
@@ -71,7 +120,7 @@ function assertTrustedDownloadUrl(url) {
  * @returns {Promise<string>}
  */
 export async function fetchText(url) {
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     headers: { "User-Agent": "playwright-official-docs-export/1.0" }
   });
   if (!res.ok) {
@@ -83,12 +132,15 @@ export async function fetchText(url) {
 /**
  * サイドバーJSONを取得する。
  * @param {Record<string, unknown>} config
+ * @param {string} [repoRoot]
  * @returns {Promise<unknown>}
  */
-export async function loadSidebar(config) {
+export async function loadSidebar(config, repoRoot) {
   if (config.fixtureDir) {
-    const file = path.join(String(config.fixtureDir), "sidebar.json");
-    const raw = await fs.readFile(file, "utf8");
+    if (!repoRoot) {
+      throw new Error("repoRoot is required when using fixtureDir");
+    }
+    const raw = await readFixtureSidebar(String(config.fixtureDir), repoRoot);
     return JSON.parse(raw);
   }
   assertTrustedDownloadUrl(String(config.sidebarUrl));
@@ -148,7 +200,7 @@ export async function buildMdxCatalog(config, repoRoot) {
 
   const listingUrl =
     "https://api.github.com/repos/microsoft/playwright.dev/contents/nodejs/versioned_docs/version-stable?ref=main";
-  const res = await fetch(listingUrl, {
+  const res = await fetchWithTimeout(listingUrl, {
     headers: { "User-Agent": "playwright-official-docs-export/1.0" }
   });
   if (!res.ok) {

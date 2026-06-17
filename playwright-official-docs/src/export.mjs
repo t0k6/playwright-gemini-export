@@ -50,7 +50,7 @@ function extractTitle(markdown, fallback) {
 export async function runExport(config, options) {
   const repoRoot = options.repoRoot;
   const outDir = path.resolve(repoRoot, String(config.outDir));
-  const sidebar = await loadSidebar(config);
+  const sidebar = await loadSidebar(config, repoRoot);
   const pages = extractDocsPages(sidebar, {
     docsBaseUrl: String(config.docsBaseUrl),
     mdxBaseUrl: String(config.mdxBaseUrl)

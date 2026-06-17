@@ -46,6 +46,14 @@ export function validateConfig(config, repoRoot) {
     throw new Error("config.baselineDocIds must be an array");
   }
 
+  if (
+    config.fixtureDir !== undefined &&
+    config.fixtureDir !== null &&
+    typeof config.fixtureDir !== "string"
+  ) {
+    throw new Error("config.fixtureDir must be a string or null");
+  }
+
   assertSafeRelPath(String(config.outDir), repoRoot);
   assertWithinRepoRoot(path.resolve(repoRoot, String(config.outDir)), repoRoot, "outDir");
 

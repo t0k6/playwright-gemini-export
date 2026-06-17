@@ -6,6 +6,7 @@ node_modules/
 playwright-official-docs/output/*
 !playwright-official-docs/output/.gitkeep
 playwright-official-docs/output.tmp-*/
+playwright-official-docs/output.bak-*/
 
 # Cursor internal
 .cursor/

@@ -49,4 +49,11 @@ describe("playwright-docs config", () => {
       /escapes repoRoot|not allowed/
     );
   });
+
+  it("rejects non-string fixtureDir", () => {
+    assert.throws(
+      () => validateConfig({ ...baseConfig, fixtureDir: 123 }, repoRoot),
+      /config\.fixtureDir must be a string or null/
+    );
+  });
 });

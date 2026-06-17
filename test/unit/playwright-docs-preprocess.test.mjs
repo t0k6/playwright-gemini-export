@@ -7,7 +7,10 @@ import {
   filterLanguagesPage,
   preprocessMdx,
   removeApiReferenceFooter,
-  removeImportsAndComponentLines
+  removeImportsAndComponentLines,
+  removeJsxComponents,
+  replaceImages,
+  selectTabContent
 } from "../../playwright-official-docs/src/preprocess.mjs";
 
 describe("playwright-docs preprocess", () => {
@@ -84,6 +87,29 @@ test('ok', async () => {});
     assert.equal(removedImports, 1);
     assert.doesNotMatch(cleaned, /^import Tabs/m);
     assert.match(cleaned, /import \{ test, expect \} from '@playwright\/test'/);
+  });
+
+  it("keeps JSX inside fenced code blocks but removes MDX chrome outside", () => {
+    const body = `<LiteYouTube videoid="abc" />\n\n\`\`\`tsx\nawait mount(<App />)\n\`\`\`\n`;
+    const cleaned = removeJsxComponents(body);
+    assert.match(cleaned, /await mount\(<App \/>\)/);
+    assert.doesNotMatch(cleaned, /LiteYouTube/);
+  });
+
+  it("keeps markdown image syntax inside fenced code blocks", () => {
+    const body = `![outside](./outside.png)\n\n\`\`\`md\n![inside](./inside.png)\n\`\`\`\n`;
+    const cleaned = replaceImages(body);
+    assert.match(cleaned, /\*\(image: outside\)\*/);
+    assert.match(cleaned, /!\[inside\]\(\.\/inside\.png\)/);
+  });
+
+  it("allows tab helpers to run without options", () => {
+    const items = [{ value: "npm", label: "npm", content: "npm ok" }];
+    assert.equal(selectTabContent(items), "npm ok");
+    const expanded = expandTabs(
+      '<Tabs><TabItem value="npm" label="npm">npm ok</TabItem></Tabs>'
+    );
+    assert.match(expanded, /npm ok/);
   });
 
   it("preprocesses full MDX with output frontmatter", () => {

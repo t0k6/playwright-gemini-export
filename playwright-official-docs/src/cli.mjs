@@ -35,7 +35,7 @@ export function parseArgs(argv) {
   const fixtureIdx = argv.indexOf("--fixture-dir");
   if (fixtureIdx !== -1) {
     fixtureDir = argv[fixtureIdx + 1] ?? null;
-    if (!fixtureDir) {
+    if (!fixtureDir || fixtureDir.startsWith("--")) {
       throw new Error("--fixture-dir requires a path");
     }
   }
