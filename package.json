@@ -7,6 +7,8 @@
     "export:gemini": "node ./tools/export-gemini-playwright-context.mjs",
     "export:gemini:check": "node ./tools/export-gemini-playwright-context.mjs --check",
     "export:gemini:pack": "node ./tools/export-gemini-playwright-context.mjs --pack",
+    "export:playwright-docs": "node ./playwright-official-docs/bin/export-playwright-docs.mjs",
+    "export:playwright-docs:check": "node ./playwright-official-docs/bin/export-playwright-docs.mjs --check",
     "lint": "npm run lint:js && npm run lint:md",
     "lint:js": "eslint .",
     "lint:md": "markdownlint-cli2",

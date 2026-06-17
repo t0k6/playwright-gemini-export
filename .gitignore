@@ -3,6 +3,9 @@ node_modules/
 
 # Tool output (exported context)
 .ai-context/
+playwright-official-docs/output/*
+!playwright-official-docs/output/.gitkeep
+playwright-official-docs/output.tmp-*/
 
 # Cursor internal
 .cursor/
