@@ -135,6 +135,7 @@ export function expandTabs(body, options) {
  */
 export function removeJsxComponents(body) {
   return body
+    .replace(/<[A-Z][A-Za-z0-9]*\b[^>]*\/>/g, "")
     .replace(/<TabItem[^>]*\/>/g, "")
     .replace(/<Tabs[^>]*\/>/g, "")
     .replace(/<\/Tabs>/g, "")

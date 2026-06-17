@@ -32,6 +32,17 @@ describe("playwright-docs sidebar", () => {
     assert.equal(categoryToSlug("Playwright Test"), "playwright-test");
     assert.equal(categoryToSlug("Guides"), "guides");
   });
+
+  it("rejects invalid doc ids from sidebar", () => {
+    assert.throws(
+      () =>
+        extractDocsPages(
+          { docs: [{ type: "doc", id: "../escape" }] },
+          { docsBaseUrl: "https://playwright.dev", mdxBaseUrl: "https://example.com/mdx" }
+        ),
+      /Invalid sidebar doc id/
+    );
+  });
 });
 
 describe("playwright-docs url-review", () => {

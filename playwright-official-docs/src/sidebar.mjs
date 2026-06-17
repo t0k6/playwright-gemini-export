@@ -43,6 +43,9 @@ export function extractDocsPages(sidebar, urls) {
       if (typed.type === "category" && Array.isArray(typed.items)) {
         walk(typed.items, typed.label ?? category);
       } else if (typed.type === "doc" && typeof typed.id === "string") {
+        if (!/^[a-z0-9-]+$/.test(typed.id)) {
+          throw new Error(`Invalid sidebar doc id: ${typed.id}`);
+        }
         order += 1;
         pages.push({
           id: typed.id,

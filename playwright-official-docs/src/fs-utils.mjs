@@ -39,6 +39,7 @@ export async function ensureDir(dir) {
 
 /**
  * 一時ディレクトリへ書き込み後、出力先へ原子的に置換する。
+ * rename 失敗時は既存 outDir をバックアップから復元する。
  * @param {string} outDir
  * @param {(tmpDir: string) => Promise<void>} writer
  * @returns {Promise<void>}
@@ -47,14 +48,30 @@ export async function writeAtomically(outDir, writer) {
   const parent = path.dirname(outDir);
   await ensureDir(parent);
   const tmpDir = `${outDir}.tmp-${process.pid}`;
+  const backupDir = `${outDir}.bak-${process.pid}`;
   await cleanDir(tmpDir);
   await ensureDir(tmpDir);
+
+  let movedOutToBackup = false;
+
   try {
     await writer(tmpDir);
-    await cleanDir(outDir);
+
+    if (await exists(outDir)) {
+      await cleanDir(backupDir);
+      await fs.rename(outDir, backupDir);
+      movedOutToBackup = true;
+    }
+
     await fs.rename(tmpDir, outDir);
+    movedOutToBackup = false;
+    await cleanDir(backupDir);
   } catch (err) {
+    if (movedOutToBackup && !(await exists(outDir)) && (await exists(backupDir))) {
+      await fs.rename(backupDir, outDir);
+    }
     await cleanDir(tmpDir);
+    await cleanDir(backupDir);
     throw err;
   }
 }
