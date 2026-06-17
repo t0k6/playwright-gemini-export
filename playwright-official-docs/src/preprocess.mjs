@@ -30,24 +30,46 @@ export function parseFrontmatter(mdx) {
 }
 
 /**
- * import行とDocusaurusコンポーネント行を削除する。
+ * 行がフェンスコードブロックの境界か判定する。
+ * @param {string} line
+ * @returns {boolean}
+ */
+function isFenceBoundary(line) {
+  return /^`{3,}/.test(line.trim());
+}
+
+/**
+ * import行とDocusaurusコンポーネント行を削除する（コードフェンス内は保持）。
  * @param {string} body
- * @returns {string}
+ * @returns {{ body: string, removedImports: number }}
  */
 export function removeImportsAndComponentLines(body) {
-  return body
-    .split("\n")
-    .filter((line) => {
+  const lines = body.split("\n");
+  let inFence = false;
+  let removedImports = 0;
+  /** @type {string[]} */
+  const kept = [];
+
+  for (const line of lines) {
+    if (isFenceBoundary(line)) {
+      inFence = !inFence;
+      kept.push(line);
+      continue;
+    }
+    if (!inFence) {
       const trimmed = line.trim();
       if (trimmed.startsWith("import ")) {
-        return false;
+        removedImports += 1;
+        continue;
       }
       if (trimmed.startsWith("<HTMLCard")) {
-        return false;
+        continue;
       }
-      return true;
-    })
-    .join("\n");
+    }
+    kept.push(line);
+  }
+
+  return { body: kept.join("\n"), removedImports };
 }
 
 /**
@@ -228,10 +250,10 @@ export function buildOutputFrontmatter(meta, page) {
  * @returns {{ markdown: string, stats: { removedImports: number, expandedTabs: number, removedApiRefs: number } }}
  */
 export function preprocessMdx(mdx, page, options) {
-  const importCount = (mdx.match(/^import /gm) ?? []).length;
   const tabsCount = (mdx.match(/<Tabs/g) ?? []).length;
   const { meta, body } = parseFrontmatter(mdx);
-  let processed = removeImportsAndComponentLines(body);
+  const { body: strippedBody, removedImports } = removeImportsAndComponentLines(body);
+  let processed = strippedBody;
   processed = expandTabs(processed, options);
   processed = removeJsxComponents(processed);
   processed = replaceImages(processed);
@@ -246,7 +268,7 @@ export function preprocessMdx(mdx, page, options) {
   return {
     markdown,
     stats: {
-      removedImports: importCount,
+      removedImports,
       expandedTabs: tabsCount,
       removedApiRefs
     }

@@ -6,7 +6,8 @@ import {
   extractTabItems,
   filterLanguagesPage,
   preprocessMdx,
-  removeApiReferenceFooter
+  removeApiReferenceFooter,
+  removeImportsAndComponentLines
 } from "../../playwright-official-docs/src/preprocess.mjs";
 
 describe("playwright-docs preprocess", () => {
@@ -67,6 +68,22 @@ yarn create playwright
     const filtered = filterLanguagesPage(body);
     assert.match(filtered, /JavaScript and TypeScript/);
     assert.doesNotMatch(filtered, /## Python/);
+  });
+
+  it("removes MDX imports but keeps imports inside fenced code blocks", () => {
+    const body = `import Tabs from '@theme/Tabs';
+
+## Example
+
+\`\`\`js
+import { test, expect } from '@playwright/test';
+test('ok', async () => {});
+\`\`\`
+`;
+    const { body: cleaned, removedImports } = removeImportsAndComponentLines(body);
+    assert.equal(removedImports, 1);
+    assert.doesNotMatch(cleaned, /^import Tabs/m);
+    assert.match(cleaned, /import \{ test, expect \} from '@playwright\/test'/);
   });
 
   it("preprocesses full MDX with output frontmatter", () => {

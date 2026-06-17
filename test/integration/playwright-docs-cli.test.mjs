@@ -61,6 +61,9 @@ describe("export-playwright-docs CLI", () => {
     assert.match(bundle, /## Installation/);
     assert.match(bundle, /## Writing tests/);
 
+    const writingTests = await fs.readFile(path.join(actualOut, "pages", "02-writing-tests.md"), "utf8");
+    assert.match(writingTests, /import \{ test, expect \} from '@playwright\/test'/);
+
     const manifest = JSON.parse(await fs.readFile(path.join(actualOut, "manifest.json"), "utf8"));
     assert.equal(manifest.pageCount, 3);
     assert.ok(manifest.pages.some((p) => p.id === "intro"));
