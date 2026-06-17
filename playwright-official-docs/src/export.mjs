@@ -9,6 +9,7 @@ import {
   buildCategoryBundle,
   buildProjectIndex,
   groupPagesByCategory,
+  orderPaddingWidth,
   pageFileName
 } from "./bundle.mjs";
 import { buildMdxCatalog, loadMdx, loadSidebar } from "./fetch.mjs";
@@ -70,10 +71,11 @@ export async function runExport(config, options) {
 
   /** @type {Array<{ order: number, id: string, title: string, category: string, sourceUrl: string, rawUrl: string, markdown: string, stats: Record<string, number> }>} */
   const processedPages = [];
-  const catalog = await buildMdxCatalog(config);
+  const mdxIndex = await buildMdxCatalog(config);
+  const orderWidth = orderPaddingWidth(pages.length);
 
   for (const page of pages) {
-    const { content, rawUrl } = await loadMdx(config, page.id, catalog);
+    const { content, rawUrl } = await loadMdx(config, page.id, mdxIndex);
     const pageWithRaw = { ...page, rawUrl };
     const { markdown, stats } = preprocessMdx(content, pageWithRaw, {
       packageManager: String(config.packageManager ?? "npm"),
@@ -96,7 +98,11 @@ export async function runExport(config, options) {
     await ensureDir(notebookDir);
 
     for (const page of processedPages) {
-      await fs.writeFile(path.join(pagesDir, pageFileName(page)), page.markdown, "utf8");
+      await fs.writeFile(
+        path.join(pagesDir, pageFileName(page, orderWidth)),
+        page.markdown,
+        "utf8"
+      );
     }
 
     const grouped = groupPagesByCategory(processedPages);
@@ -130,7 +136,7 @@ export async function runExport(config, options) {
         order: p.order,
         sourceUrl: p.sourceUrl,
         rawUrl: p.rawUrl,
-        outputFile: `pages/${pageFileName(p)}`,
+        outputFile: `pages/${pageFileName(p, orderWidth)}`,
         stats: p.stats
       }))
     };

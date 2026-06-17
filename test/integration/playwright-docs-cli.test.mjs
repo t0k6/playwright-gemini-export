@@ -85,4 +85,13 @@ describe("export-playwright-docs CLI", () => {
     const second = await fs.readFile(path.join(outDir, "pages", "01-intro.md"), "utf8");
     assert.equal(first, second);
   });
+
+  it("rejects fixture-dir outside repo", async () => {
+    const { code, stderr } = await runExport(projectRoot, [
+      "--fixture-dir",
+      "../outside-playwright-docs"
+    ]);
+    assert.notEqual(code, 0);
+    assert.match(stderr, /escapes repoRoot|not allowed/);
+  });
 });

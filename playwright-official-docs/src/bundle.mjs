@@ -5,21 +5,32 @@
 import { categoryToSlug } from "./sidebar.mjs";
 
 /**
- * orderを2桁ゼロ埋めする。
+ * order のゼロ埋め幅を決める。
+ * @param {number} totalPages
+ * @returns {number}
+ */
+export function orderPaddingWidth(totalPages) {
+  return Math.max(2, String(totalPages).length);
+}
+
+/**
+ * orderをゼロ埋めする。
  * @param {number} order
+ * @param {number} width
  * @returns {string}
  */
-export function formatOrder(order) {
-  return String(order).padStart(2, "0");
+export function formatOrder(order, width) {
+  return String(order).padStart(width, "0");
 }
 
 /**
  * ページファイル名を生成する。
  * @param {{ order: number, id: string }} page
+ * @param {number} orderWidth
  * @returns {string}
  */
-export function pageFileName(page) {
-  return `${formatOrder(page.order)}-${page.id}.md`;
+export function pageFileName(page, orderWidth) {
+  return `${formatOrder(page.order, orderWidth)}-${page.id}.md`;
 }
 
 /**

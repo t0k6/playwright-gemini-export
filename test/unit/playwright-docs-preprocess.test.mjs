@@ -10,6 +10,27 @@ import {
 } from "../../playwright-official-docs/src/preprocess.mjs";
 
 describe("playwright-docs preprocess", () => {
+  it("expands nested Tabs blocks iteratively", () => {
+    const body = `<Tabs>
+<TabItem value="outer" label="outer">
+Outer
+<Tabs>
+<TabItem value="npm" label="npm">
+
+\`\`\`bash
+npm test
+\`\`\`
+
+</TabItem>
+</Tabs>
+</TabItem>
+</Tabs>`;
+    const expanded = expandTabs(body, { packageManager: "npm" });
+    assert.match(expanded, /npm test/);
+    assert.doesNotMatch(expanded, /<Tabs/);
+    assert.doesNotMatch(expanded, /<TabItem/);
+  });
+
   it("selects npm tab content by default", () => {
     const tabs = `<Tabs>
 <TabItem value="npm" label="npm">

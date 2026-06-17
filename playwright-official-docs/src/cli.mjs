@@ -5,7 +5,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { loadDefaultConfig, mergeConfig, validateConfig } from "./config.mjs";
+import { loadDefaultConfig, mergeConfig, resolveFixtureDir, validateConfig } from "./config.mjs";
 import { runExport } from "./export.mjs";
 
 /**
@@ -55,8 +55,12 @@ export async function runCli() {
 
   const { dryRun, fixtureDir } = parseArgs(args);
   const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-  const config = mergeConfig(await loadDefaultConfig(), fixtureDir ? { fixtureDir } : {});
-  validateConfig(config);
+  const resolvedFixtureDir = resolveFixtureDir(fixtureDir, repoRoot);
+  const config = mergeConfig(
+    await loadDefaultConfig(),
+    resolvedFixtureDir ? { fixtureDir: resolvedFixtureDir } : {}
+  );
+  validateConfig(config, repoRoot);
 
   const result = await runExport(config, { dryRun, repoRoot });
 

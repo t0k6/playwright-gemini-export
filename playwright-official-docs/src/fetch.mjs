@@ -8,6 +8,10 @@ import path from "node:path";
 import { parseFrontmatter } from "./preprocess.mjs";
 
 /**
+ * @typedef {{ catalog: Map<string, string>, contentByStem: Map<string, string> }} MdxIndex
+ */
+
+/**
  * HTTPテキストを取得する。
  * @param {string} url
  * @returns {Promise<string>}
@@ -38,13 +42,34 @@ export async function loadSidebar(config) {
 }
 
 /**
+ * カタログへエントリを登録する。
+ * @param {MdxIndex} index
+ * @param {string} id
+ * @param {string} stem
+ * @param {string} content
+ */
+function registerMdxEntry(index, id, stem, content) {
+  const existingStem = index.catalog.get(id);
+  if (existingStem !== undefined && existingStem !== stem) {
+    console.warn(
+      `Warning: duplicate doc id "${id}" in MDX catalog (${existingStem} vs ${stem}); using ${stem}`
+    );
+  }
+  index.catalog.set(id, stem);
+  index.contentByStem.set(stem, content);
+}
+
+/**
  * MDX frontmatter の id からファイル名 stem への索引を構築する。
  * @param {Record<string, unknown>} config
- * @returns {Promise<Map<string, string>>}
+ * @returns {Promise<MdxIndex>}
  */
 export async function buildMdxCatalog(config) {
-  /** @type {Map<string, string>} */
-  const catalog = new Map();
+  /** @type {MdxIndex} */
+  const index = {
+    catalog: new Map(),
+    contentByStem: new Map()
+  };
 
   if (config.fixtureDir) {
     const dir = path.join(String(config.fixtureDir), "mdx");
@@ -53,9 +78,9 @@ export async function buildMdxCatalog(config) {
       const stem = file.replace(/\.mdx$/, "");
       const content = await fs.readFile(path.join(dir, file), "utf8");
       const { meta } = parseFrontmatter(content);
-      catalog.set(meta.id ?? stem, stem);
+      registerMdxEntry(index, meta.id ?? stem, stem, content);
     }
-    return catalog;
+    return index;
   }
 
   const listingUrl =
@@ -77,10 +102,10 @@ export async function buildMdxCatalog(config) {
     const stem = entry.name.replace(/\.mdx$/, "");
     const content = await fetchText(entry.download_url);
     const { meta } = parseFrontmatter(content);
-    catalog.set(meta.id ?? stem, stem);
+    registerMdxEntry(index, meta.id ?? stem, stem, content);
   }
 
-  return catalog;
+  return index;
 }
 
 /**
@@ -97,19 +122,26 @@ export function resolveMdxStem(catalog, id) {
  * MDX本文を取得する。
  * @param {Record<string, unknown>} config
  * @param {string} id
- * @param {Map<string, string>} catalog
+ * @param {MdxIndex} index
  * @returns {Promise<{ content: string, stem: string, rawUrl: string }>}
  */
-export async function loadMdx(config, id, catalog) {
-  const stem = resolveMdxStem(catalog, id);
+export async function loadMdx(config, id, index) {
+  const stem = resolveMdxStem(index.catalog, id);
   const rawUrl = `${config.mdxBaseUrl}/${stem}.mdx`;
+
+  const cached = index.contentByStem.get(stem);
+  if (cached !== undefined) {
+    return { content: cached, stem, rawUrl };
+  }
 
   if (config.fixtureDir) {
     const file = path.join(String(config.fixtureDir), "mdx", `${stem}.mdx`);
     const content = await fs.readFile(file, "utf8");
+    index.contentByStem.set(stem, content);
     return { content, stem, rawUrl };
   }
 
   const content = await fetchText(rawUrl);
+  index.contentByStem.set(stem, content);
   return { content, stem, rawUrl };
 }

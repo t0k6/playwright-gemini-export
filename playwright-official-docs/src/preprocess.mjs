@@ -115,10 +115,17 @@ export function selectTabContent(items, options) {
  * @returns {string}
  */
 export function expandTabs(body, options) {
-  return body.replace(/<Tabs[^>]*>([\s\S]*?)<\/Tabs>/g, (_full, inner) => {
-    const items = extractTabItems(inner);
-    return selectTabContent(items, options);
-  });
+  let result = body;
+  const tabsPattern = /<Tabs[^>]*>([\s\S]*?)<\/Tabs>/g;
+  let prev;
+  do {
+    prev = result;
+    result = result.replace(tabsPattern, (_full, inner) => {
+      const items = extractTabItems(inner);
+      return selectTabContent(items, options);
+    });
+  } while (result !== prev && /<Tabs[\s>]/.test(result));
+  return result;
 }
 
 /**
