@@ -4,9 +4,21 @@
  * テスト向けの純粋関数は `./lib/gemini-export-pure.mjs` を参照。
  */
 
-import { runCli } from "./gemini-export/cli.mjs";
+var MIN_NODE_MAJOR = 18;
+var nodeMajor = Number(process.versions.node.split(".")[0]);
 
-runCli().catch((err) => {
-  console.error(err);
+if (nodeMajor < MIN_NODE_MAJOR) {
+  console.error(
+    "Node.js " + MIN_NODE_MAJOR + " or newer is required (current: " + process.version + ")."
+  );
   process.exit(1);
-});
+}
+
+import("./gemini-export/cli.mjs")
+  .then(function (mod) {
+    return mod.runCli();
+  })
+  .catch(function (err) {
+    console.error(err && err.message ? err.message : String(err));
+    process.exit(1);
+  });
