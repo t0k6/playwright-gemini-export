@@ -30,6 +30,25 @@ export function parseFrontmatter(mdx) {
 }
 
 /**
+ * frontmatter から title を取り出す（本文の title: 行は無視）。
+ * @param {string} markdown
+ * @param {string} fallback
+ * @returns {string}
+ */
+export function extractTitleFromFrontmatter(markdown, fallback) {
+  const { meta } = parseFrontmatter(markdown);
+  if (!meta.title) {
+    return fallback;
+  }
+  const raw = meta.title.trim();
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw.replace(/^"(.*)"$/, "$1");
+  }
+}
+
+/**
  * 行がフェンスコードブロックの境界か判定する。
  * @param {string} line
  * @returns {boolean}
@@ -132,6 +151,28 @@ export function extractTabItems(tabsBlock) {
   return items;
 }
 
+/** @type {Record<string, string[]>} */
+const LANGUAGE_TAB_CANDIDATES = {
+  typescript: ["typescript", "ts", "javascript", "js"],
+  ts: ["ts", "typescript", "javascript", "js"],
+  javascript: ["javascript", "js", "typescript", "ts"],
+  js: ["js", "javascript", "typescript", "ts"]
+};
+
+/**
+ * languageTab 設定から TabItem value の照合順を決める。
+ * @param {string} languageTab
+ * @returns {string[]}
+ */
+function languageTabCandidates(languageTab) {
+  const key = String(languageTab).toLowerCase();
+  const list = LANGUAGE_TAB_CANDIDATES[key];
+  if (list) {
+    return list;
+  }
+  return [languageTab, "typescript", "ts", "javascript", "js"];
+}
+
 /**
  * 優先タブを選択する。
  * @param {Array<{ value: string, label: string, content: string }>} items
@@ -147,9 +188,8 @@ export function selectTabContent(items, options = {}) {
   }
 
   const pm = options.packageManager ?? "npm";
-  const lang = options.languageTab ?? "typescript";
+  const langValues = languageTabCandidates(options.languageTab ?? "typescript");
   const pmValues = [pm, "npm", "npx"];
-  const langValues = [lang, "typescript", "js", "javascript"];
 
   for (const v of pmValues) {
     const found = items.find((item) => item.value.toLowerCase() === v.toLowerCase());

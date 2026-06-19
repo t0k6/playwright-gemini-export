@@ -15,31 +15,13 @@ import {
 } from "./bundle.mjs";
 import { buildMdxCatalog, loadMdx, loadSidebar } from "./fetch.mjs";
 import { ensureDir, writeAtomically } from "./fs-utils.mjs";
-import { preprocessMdx } from "./preprocess.mjs";
+import { extractTitleFromFrontmatter, preprocessMdx } from "./preprocess.mjs";
 import { extractDocsPages } from "./sidebar.mjs";
 import {
   buildOfficialUrlListMarkdown,
   buildUrlReviewMarkdown,
   diffDocIds
 } from "./url-review.mjs";
-
-/**
- * ページタイトルをfrontmatterから補完する。
- * @param {string} markdown
- * @param {string} fallback
- * @returns {string}
- */
-function extractTitle(markdown, fallback) {
-  const match = markdown.match(/^title:\s*(.+)$/m);
-  if (!match) {
-    return fallback;
-  }
-  try {
-    return JSON.parse(match[1].trim());
-  } catch {
-    return match[1].trim().replace(/^"(.*)"$/, "$1");
-  }
-}
 
 /**
  * エクスポートを実行する。
@@ -83,7 +65,7 @@ export async function runExport(config, options) {
       languageTab: String(config.languageTab ?? "typescript"),
       tabMode: String(config.tabMode ?? "select")
     });
-    const title = extractTitle(markdown, page.id);
+    const title = extractTitleFromFrontmatter(markdown, page.id);
     processedPages.push({
       ...pageWithRaw,
       title,

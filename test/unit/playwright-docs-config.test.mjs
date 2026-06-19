@@ -53,7 +53,21 @@ describe("playwright-docs config", () => {
   it("rejects non-string fixtureDir", () => {
     assert.throws(
       () => validateConfig({ ...baseConfig, fixtureDir: 123 }, repoRoot),
-      /config\.fixtureDir must be a string or null/
+      /config\.fixtureDir must be null, undefined, or a non-empty string/
+    );
+  });
+
+  it("rejects empty string fixtureDir", () => {
+    assert.throws(
+      () => validateConfig({ ...baseConfig, fixtureDir: "" }, repoRoot),
+      /config\.fixtureDir must be null, undefined, or a non-empty string/
+    );
+  });
+
+  it("rejects whitespace-only fixtureDir", () => {
+    assert.throws(
+      () => validateConfig({ ...baseConfig, fixtureDir: "   " }, repoRoot),
+      /config\.fixtureDir must be null, undefined, or a non-empty string/
     );
   });
 });

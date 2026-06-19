@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   expandTabs,
   extractTabItems,
+  extractTitleFromFrontmatter,
   filterLanguagesPage,
   preprocessMdx,
   removeApiReferenceFooter,
@@ -59,6 +60,15 @@ yarn create playwright
     assert.doesNotMatch(expanded, /yarn create playwright/);
   });
 
+  it("selects ts tab when languageTab is typescript", () => {
+    const items = [
+      { value: "js", label: "JavaScript", content: "JS_CODE" },
+      { value: "ts", label: "TypeScript", content: "TS_CODE" }
+    ];
+    assert.equal(selectTabContent(items, { languageTab: "typescript" }), "TS_CODE");
+    assert.equal(selectTabContent(items, { languageTab: "javascript" }), "JS_CODE");
+  });
+
   it("removes API reference footer definitions", () => {
     const body = "## Title\n\nContent.\n\n[Page]: /api/class-page.mdx \"Page\"\n";
     const cleaned = removeApiReferenceFooter(body);
@@ -110,6 +120,18 @@ test('ok', async () => {});
       '<Tabs><TabItem value="npm" label="npm">npm ok</TabItem></Tabs>'
     );
     assert.match(expanded, /npm ok/);
+  });
+
+  it("extractTitleFromFrontmatter ignores title lines in document body", () => {
+    const markdown = `---
+id: intro
+title: "Real Title"
+---
+## Example
+
+title: Fake Title
+`;
+    assert.equal(extractTitleFromFrontmatter(markdown, "fallback"), "Real Title");
   });
 
   it("preprocesses full MDX with output frontmatter", () => {
