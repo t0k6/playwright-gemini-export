@@ -21,6 +21,10 @@ PlaywrightのE2Eテストコードを、安全にGeminiに渡すためのサニ�
 - `--check`（dry-run）で「何が出るか」だけ確認可能
 - `--pack`で`outDir/_pack/`にindex・chunk・bundleを生成（Gemini/NotebookLM向けの分割成果物。詳細は[docs/gemini-workflow.md](docs/gemini-workflow.md)）
 
+## 関連ツール
+
+- [playwright-official-docs/](playwright-official-docs/) — Playwright公式 Node.js ドキュメントを NotebookLM / Gemini 向けに取得・前処理・保存するツール（本リポジトリのE2Eエクスポートを補完）
+
 ## 前提
 
 Node.js 18以上を推奨

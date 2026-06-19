@@ -13,7 +13,7 @@ export default defineConfig([
     ],
   },
   {
-    files: ["tools/**/*.mjs"],
+    files: ["tools/**/*.mjs", "playwright-official-docs/**/*.mjs"],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "module",
@@ -21,7 +21,7 @@ export default defineConfig([
     },
   },
   {
-    files: ["tools/**/*.mjs"],
+    files: ["tools/**/*.mjs", "playwright-official-docs/**/*.mjs"],
     ...js.configs.recommended,
   },
   {
